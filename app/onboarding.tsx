@@ -2,7 +2,14 @@ import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { Animated, Dimensions, Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, Animated, Dimensions, Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { GoogleSignin, statusCodes } from '@react-native-google-signin/google-signin';
+import { authApi } from '../services/api';
+import { storage } from '../services/storage';
+
+const GOOGLE_WEB_CLIENT_ID = '192612849253-1qk0922sec7l5qokickou9co2r3ilk6t.apps.googleusercontent.com';
+
+GoogleSignin.configure({ webClientId: GOOGLE_WEB_CLIENT_ID });
 
 const { width, height } = Dimensions.get('window');
 
@@ -28,12 +35,45 @@ const slides = [
 ];
 
 export default function Onboarding() {
-  const [modalVisible, setModalVisible] = useState(false);
-  const [pressed, setPressed] = useState(false);
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const opacities = useRef(slides.map((_, i) => new Animated.Value(i === 0 ? 1 : 0))).current;
-  const isAnimating = useRef(false);
-  const router = useRouter();
+  const [modalVisible, setModalVisible]   = useState(false);
+  const [pressed, setPressed]             = useState(false);
+  const [currentIndex, setCurrentIndex]   = useState(0);
+  const [googleLoading, setGoogleLoading] = useState(false);
+  const opacities    = useRef(slides.map((_, i) => new Animated.Value(i === 0 ? 1 : 0))).current;
+  const isAnimating  = useRef(false);
+  const router       = useRouter();
+
+  const handleGoogleToken = async (idToken: string) => {
+    try {
+      const { data } = await authApi.googleLogin(idToken);
+      await storage.set('token', data.token);
+      await storage.set('user', JSON.stringify(data.user));
+      setModalVisible(false);
+      router.replace('/(tabs)');
+    } catch (err: any) {
+      console.log('[GOOGLE TOKEN ERROR]', err?.response?.data ?? err?.message);
+      Alert.alert('Error backend', JSON.stringify(err?.response?.data ?? err?.message));
+    }
+  };
+
+  const handleGoogleSignIn = async () => {
+    setGoogleLoading(true);
+    try {
+      await GoogleSignin.hasPlayServices();
+      await GoogleSignin.signIn();
+      const { idToken } = await GoogleSignin.getTokens();
+      if (idToken) {
+        await handleGoogleToken(idToken);
+      }
+    } catch (error: any) {
+      console.log('[GOOGLE ERROR] code:', error.code, 'message:', error.message);
+      if (error.code !== statusCodes.SIGN_IN_CANCELLED) {
+        Alert.alert('Error', `${error.code ?? ''}: ${error.message ?? 'Error desconocido'}`);
+      }
+    } finally {
+      setGoogleLoading(false);
+    }
+  };
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -65,7 +105,6 @@ export default function Onboarding() {
   return (
     <View style={styles.container}>
 
-      {/* Todas las imágenes apiladas — cada una con su propia opacidad */}
       {slides.map((slide, index) => (
         <Animated.View
           key={slide.id}
@@ -79,13 +118,11 @@ export default function Onboarding() {
         </Animated.View>
       ))}
 
-      {/* Gradiente */}
       <LinearGradient
         colors={['transparent', 'rgba(0,0,0,0.25)', 'rgba(0,0,0,0.82)']}
         style={StyleSheet.absoluteFill}
       />
 
-      {/* Contenido flotante */}
       <View style={styles.content}>
 
         {slides[currentIndex].title ? (
@@ -110,7 +147,6 @@ export default function Onboarding() {
 
       </View>
 
-      {/* MODAL */}
       <Modal visible={modalVisible} animationType="slide" transparent={true}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
@@ -120,13 +156,19 @@ export default function Onboarding() {
               <Text style={styles.close} onPress={() => setModalVisible(false)}>✕</Text>
             </View>
 
-            <TouchableOpacity style={styles.option}>
+            <TouchableOpacity
+              style={[styles.option, googleLoading && { opacity: 0.5 }]}
+              onPress={handleGoogleSignIn}
+              disabled={googleLoading}
+            >
               <View style={styles.optionRow}>
                 <Image
                   source={require('../assets/images/google.png')}
                   style={styles.googleIcon}
                 />
-                <Text style={{ fontSize: 16 }}>Iniciar Sesion con Google</Text>
+                <Text style={{ fontSize: 16 }}>
+                  {googleLoading ? 'Conectando...' : 'Iniciar Sesión con Google'}
+                </Text>
               </View>
             </TouchableOpacity>
 

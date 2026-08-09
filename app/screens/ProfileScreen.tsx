@@ -9,24 +9,14 @@ import { useNavigation } from '@react-navigation/native';
 import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useColors } from '../context/ThemeContext';
-import { getStorageUrl, userApi } from '../../services/api';
+import { getStorageUrl, userApi, badgeApi } from '../../services/api';
 import { storage } from '../../services/storage';
 
 const ACCENT = '#FF0066';
 const HORIZONTAL_MARGIN = 16;
 
 type Stats = { streak: number; points: number };
-
-function computeAchievements(stats: Stats) {
-  return [
-    { icon: '🏆', label: 'Primer sala',  unlocked: stats.points >= 1 },
-    { icon: '🔥', label: 'Racha 7d',     unlocked: stats.streak >= 7 },
-    { icon: '⚡', label: '500 puntos',   unlocked: stats.points >= 500 },
-    { icon: '🥊', label: 'Top activo',   unlocked: stats.points >= 50 },
-    { icon: '🏅', label: 'Top 10',       unlocked: false },
-    { icon: '💪', label: 'Élite',        unlocked: stats.points >= 1500 },
-  ];
-}
+type Badge = { key: string; name: string; icon: string; description: string; earned: boolean; unlocked_at: string | null };
 
 function getRank(points: number) {
   if (points >= 1500) return 'Guerrero Elite';
@@ -54,6 +44,7 @@ export default function ProfileScreen() {
   const [userName, setUserName]   = useState('Usuario');
   const [avatarUri, setAvatarUri] = useState<string | null>(null);
   const [stats, setStats]         = useState<Stats>({ streak: 0, points: 0 });
+  const [badges, setBadges]       = useState<Badge[]>([]);
   const [loading, setLoading]     = useState(true);
 
   const loadProfile = useCallback(async () => {
@@ -77,11 +68,15 @@ export default function ProfileScreen() {
 
     if (t) {
       try {
-        const statsRes = await userApi.stats(t);
+        const [statsRes, badgesRes] = await Promise.all([
+          userApi.stats(t),
+          badgeApi.get(t),
+        ]);
         setStats({
           streak: statsRes.data.streak ?? 0,
           points: statsRes.data.points ?? 0,
         });
+        setBadges(badgesRes.data.badges ?? []);
       } catch (_) {}
     }
     setLoading(false);
@@ -92,10 +87,10 @@ export default function ProfileScreen() {
     loadProfile();
   }, [loadProfile]));
 
-  const achievements = computeAchievements(stats);
-  const level        = getLevel(stats.points);
-  const xpPercent    = Math.min(100, (stats.points % 50) * 2);
-  const rank         = getRank(stats.points);
+  const level     = getLevel(stats.points);
+  const xpPercent = Math.min(100, (stats.points % 50) * 2);
+  const rank      = getRank(stats.points);
+  const earned    = badges.filter(b => b.earned).length;
 
   return (
     <View style={[s.root, { backgroundColor: C.bg }]}>
@@ -178,14 +173,17 @@ export default function ProfileScreen() {
           <View style={s.sectionHeader}>
             <Text style={[s.sectionLabel, { color: C.textSecondary }]}>LOGROS</Text>
             <Text style={[s.seeAll, { color: C.mugenPink }]}>
-              {achievements.filter(a => a.unlocked).length}/{achievements.length}
+              {badges.filter(b => b.earned).length}/{badges.length}
             </Text>
           </View>
           <View style={s.grid}>
-            {achievements.map(a => (
-              <View key={a.label} style={[s.badge, { backgroundColor: C.card, borderColor: a.unlocked ? C.mugenPink + '35' : C.border, opacity: a.unlocked ? 1 : 0.4 }, cardShadow]}>
-                <Text style={s.badgeIcon}>{a.icon}</Text>
-                <Text style={[s.badgeLabel, { color: C.textSecondary }]}>{a.label}</Text>
+            {badges.map((b: Badge) => (
+              <View key={b.key} style={[s.badge, { backgroundColor: C.card, borderColor: b.earned ? C.mugenPink + '35' : C.border, opacity: b.earned ? 1 : 0.35 }, cardShadow]}>
+                <Ionicons name={b.icon as any} size={26} color={b.earned ? C.mugenPink : C.textSecondary} />
+                <Text style={[s.badgeLabel, { color: C.textSecondary }]}>{b.name}</Text>
+                {b.earned && b.unlocked_at ? (
+                  <Text style={{ fontSize: 8, color: C.mugenPink, fontWeight: '700' }}>{b.unlocked_at}</Text>
+                ) : null}
               </View>
             ))}
           </View>
@@ -227,6 +225,5 @@ const s = StyleSheet.create({
   seeAll:        { fontSize: 13, fontWeight: '700' },
   grid:          { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 14 },
   badge:         { width: '30.5%', aspectRatio: 1, borderRadius: 12, justifyContent: 'center', alignItems: 'center', borderWidth: 1, gap: 6 },
-  badgeIcon:     { fontSize: 26 },
   badgeLabel:    { fontSize: 10, fontWeight: '800', textAlign: 'center' },
 });

@@ -704,6 +704,36 @@ export default function RoomDetailScreen() {
               </View>
               <Text style={[st.heroTitle, bf('900')]}>{challengeName || `SALA #${id}`}</Text>
               <Text style={st.heroSub}>{leaderboard.length} participante{leaderboard.length !== 1 ? 's' : ''}</Text>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 10 }}>
+                <Pressable
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#FF006622', paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, borderWidth: 1, borderColor: '#FF006666' }}
+                  onPress={() => router.push({ pathname: '/screens/WrappedScreen', params: { challengeId: String(id), months: '12' } })}
+                >
+                  <Ionicons name="sparkles" size={14} color="#FF0066" />
+                  <Text style={{ color: '#FF0066', fontWeight: '800', fontSize: 12 }}>WRAPPED</Text>
+                </Pressable>
+                <Pressable
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#ffaa0022', paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, borderWidth: 1, borderColor: '#ffaa0066' }}
+                  onPress={() => router.push({ pathname: '/screens/PledgeScreen', params: { challengeId: String(id) } })}
+                >
+                  <Ionicons name="trophy-outline" size={14} color="#ffaa00" />
+                  <Text style={{ color: '#ffaa00', fontWeight: '800', fontSize: 12 }}>APUESTA</Text>
+                </Pressable>
+                <Pressable
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#00cc6622', paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, borderWidth: 1, borderColor: '#00cc6666' }}
+                  onPress={() => router.push({ pathname: '/screens/CommitmentsScreen', params: { challengeId: String(id) } })}
+                >
+                  <Ionicons name="calendar-outline" size={14} color="#00cc66" />
+                  <Text style={{ color: '#00cc66', fontWeight: '800', fontSize: 12 }}>SEMANA</Text>
+                </Pressable>
+                <Pressable
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#0066ff22', paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, borderWidth: 1, borderColor: '#0066ff66' }}
+                  onPress={() => router.push({ pathname: '/screens/BattleScreen', params: { challengeId: String(id), challengeName: challengeName || String(id) } })}
+                >
+                  <Ionicons name="flash-outline" size={14} color="#0088ff" />
+                  <Text style={{ color: '#0088ff', fontWeight: '800', fontSize: 12 }}>VS SALA</Text>
+                </Pressable>
+              </View>
             </View>
           </LinearGradient>
         </View>

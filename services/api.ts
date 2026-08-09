@@ -16,6 +16,7 @@ const getHostBase = () => {
 
 export const getStorageUrl = (path: string | null | undefined): string | null => {
   if (!path) return null;
+  if (path.startsWith('http://') || path.startsWith('https://')) return path;
   return `${getHostBase()}/storage/${path}`;
 };
 
@@ -118,6 +119,14 @@ export const authApi = {
 
   logout: (token: string) =>
     api.post('/logout', {}, { headers: { Authorization: `Bearer ${token}` } }),
+
+  googleLogin: (idToken: string) =>
+    api.post('/auth/google', { id_token: idToken }),
+};
+
+export const badgeApi = {
+  get: (token: string) =>
+    api.get('/user/badges', { headers: { Authorization: `Bearer ${token}` } }),
 };
 
 export const inviteApi = {
@@ -193,6 +202,38 @@ export const messageApi = {
 
   markAllRead: (token: string) =>
     api.post('/messages/read-all', {}, { headers: { Authorization: `Bearer ${token}` } }),
+};
+
+export const wrappedApi = {
+  get: (challengeId: number | string, months: number, token: string) =>
+    api.get(`/challenges/${challengeId}/wrapped?months=${months}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    }),
+};
+
+export const pledgeApi = {
+  get: (challengeId: number | string, token: string) =>
+    api.get(`/challenges/${challengeId}/pledges`, { headers: { Authorization: `Bearer ${token}` } }),
+  set: (challengeId: number | string, targetDays: number, token: string) =>
+    api.post(`/challenges/${challengeId}/pledges`, { target_days: targetDays }, { headers: { Authorization: `Bearer ${token}` } }),
+};
+
+export const commitmentApi = {
+  get: (challengeId: number | string, token: string) =>
+    api.get(`/challenges/${challengeId}/commitments`, { headers: { Authorization: `Bearer ${token}` } }),
+  set: (challengeId: number | string, days: number[], token: string) =>
+    api.post(`/challenges/${challengeId}/commitments`, { committed_days: days }, { headers: { Authorization: `Bearer ${token}` } }),
+};
+
+export const battleApi = {
+  list: (token: string) =>
+    api.get('/battles', { headers: { Authorization: `Bearer ${token}` } }),
+  create: (challengeId: number, opponentCode: string, durationDays: number, token: string) =>
+    api.post('/battles', { challenge_id: challengeId, opponent_code: opponentCode, duration_days: durationDays }, { headers: { Authorization: `Bearer ${token}` } }),
+  accept: (battleId: number, token: string) =>
+    api.post(`/battles/${battleId}/accept`, {}, { headers: { Authorization: `Bearer ${token}` } }),
+  show: (battleId: number, token: string) =>
+    api.get(`/battles/${battleId}`, { headers: { Authorization: `Bearer ${token}` } }),
 };
 
 export const feedApi = {
