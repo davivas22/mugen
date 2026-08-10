@@ -2,6 +2,7 @@ import * as Notifications from 'expo-notifications';
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 import { useRouter } from 'expo-router';
+import { isRunningInExpoGo } from 'expo';
 
 // ── Canal de Android ───────────────────────────────────────────────────────────
 export async function createNotificationChannels() {
@@ -41,6 +42,12 @@ export function setupForegroundHandler() {
 
 // ── Solicitar permiso y obtener token ─────────────────────────────────────────
 export async function registerForPushNotifications(): Promise<string | null> {
+  // Push remoto no está soportado en Expo Go (SDK 53+). Evita el warning.
+  if (isRunningInExpoGo()) {
+    console.log('[Push] En Expo Go: push remoto no disponible, se omite.');
+    return null;
+  }
+
   try {
     const { status: existing } = await Notifications.getPermissionsAsync();
     let finalStatus = existing;

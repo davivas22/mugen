@@ -21,10 +21,12 @@ import {
 import { useColors } from '../context/ThemeContext';
 import { getStorageUrl, userApi } from '../../services/api';
 import { storage } from '../../services/storage';
+import { useTranslation } from 'react-i18next';
 
 export default function EditProfileScreen() {
   const navigation = useNavigation<any>();
   const { C, isDark } = useColors();
+  const { t } = useTranslation();
 
   const theme = {
     bg:               isDark ? '#000000' : '#f9f9f9',
@@ -119,7 +121,7 @@ export default function EditProfileScreen() {
   const pickAvatar = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert('Permiso requerido', 'Necesitamos acceso a tu galería para cambiar la foto.');
+      Alert.alert(t('editProfile.galleryRequired'), t('editProfile.galleryRequiredMsg'));
       return;
     }
 
@@ -165,7 +167,7 @@ export default function EditProfileScreen() {
     // ────────────────────────────────────────────────────────────────────────
 
     if (!form.fullName.trim()) {
-      Alert.alert('Error', 'El nombre no puede estar vacío.');
+      Alert.alert(t('common.error'), t('editProfile.emptyName'));
       return;
     }
 
@@ -245,12 +247,12 @@ export default function EditProfileScreen() {
         }
       }
 
-      Alert.alert('¡Listo!', 'Perfil actualizado correctamente.', [
+      Alert.alert(t('editProfile.saved'), t('editProfile.savedMsg'), [
         { text: 'OK', onPress: () => navigation.goBack() },
       ]);
     } catch (err: any) {
       console.log('[SAVE] error:', err);
-      Alert.alert('Error', 'No se pudo guardar. Inténtalo de nuevo.');
+      Alert.alert(t('common.error'), t('editProfile.saveError'));
     } finally {
       setSaving(false);
     }
@@ -258,27 +260,7 @@ export default function EditProfileScreen() {
 
   const update = (k: string, v: string) => setForm(p => ({ ...p, [k]: v }));
 
-  const InputField = ({
-    label, field, placeholder, extra = {} as any,
-  }: { label: string; field: string; placeholder: string; extra?: any }) => (
-    <View style={s.inputGroup}>
-      <Text style={[s.label, { color: theme.textSecondary }]}>{label}</Text>
-      <TextInput
-        style={[
-          s.input,
-          { backgroundColor: theme.card, color: theme.textPrimary, borderColor: focused === field ? theme.primary : theme.border },
-          extra.multiline && s.inputMulti,
-        ]}
-        value={(form as any)[field]}
-        onChangeText={v => update(field, v)}
-        placeholder={placeholder}
-        placeholderTextColor={theme.textMuted}
-        onFocus={() => setFocused(field)}
-        onBlur={() => setFocused(null)}
-        {...extra}
-      />
-    </View>
-  );
+
 
   if (loading) {
     return (
@@ -302,7 +284,7 @@ export default function EditProfileScreen() {
             >
               <MaterialCommunityIcons name="close" size={20} color={theme.textPrimary} />
             </TouchableOpacity>
-            <Text style={[s.headerTitle, { color: theme.textPrimary }]}>Editar Perfil</Text>
+            <Text style={[s.headerTitle, { color: theme.textPrimary }]}>{t('editProfile.title')}</Text>
             <View style={{ width: 40 }} />
           </View>
         </SafeAreaView>
@@ -332,27 +314,71 @@ export default function EditProfileScreen() {
               </View>
             </TouchableOpacity>
             <TouchableOpacity onPress={pickAvatar} activeOpacity={0.7}>
-              <Text style={[s.changePhoto, { color: theme.primaryContainer }]}>Cambiar foto</Text>
+              <Text style={[s.changePhoto, { color: theme.primaryContainer }]}>{t('editProfile.changePhoto')}</Text>
             </TouchableOpacity>
           </View>
 
           {/* Form */}
           <View style={s.form}>
-            <InputField label="Nombre completo"    field="fullName" placeholder="Tu nombre" />
-            <InputField label="Nombre de usuario"  field="username" placeholder="@usuario" extra={{ autoCapitalize: 'none' }} />
             <InputField
-              label="Biografía"
+              label={t('editProfile.fullName')}
+              field="fullName"
+              placeholder={t('editProfile.fullNamePlaceholder')}
+              value={form.fullName}
+              onChangeText={v => update('fullName', v)}
+              focused={focused}
+              setFocused={setFocused}
+              theme={theme}
+            />
+            <InputField
+              label={t('editProfile.username')}
+              field="username"
+              placeholder={t('editProfile.usernamePlaceholder')}
+              value={form.username}
+              onChangeText={v => update('username', v)}
+              focused={focused}
+              setFocused={setFocused}
+              theme={theme}
+              extra={{ autoCapitalize: 'none' }}
+            />
+            <InputField
+              label={t('editProfile.bio')}
               field="bio"
-              placeholder="Cuéntanos algo..."
+              placeholder={t('editProfile.bioPlaceholder')}
+              value={form.bio}
+              onChangeText={v => update('bio', v)}
+              focused={focused}
+              setFocused={setFocused}
+              theme={theme}
               extra={{ multiline: true, numberOfLines: 3, textAlignVertical: 'top' }}
             />
             <View style={s.metricsRow}>
               <View style={{ flex: 1 }}>
-                <InputField label="Peso (kg)" field="weight" placeholder="00" extra={{ keyboardType: 'numeric' }} />
+                <InputField
+                  label={t('editProfile.weight')}
+                  field="weight"
+                  placeholder={t('editProfile.weightPlaceholder')}
+                  value={form.weight}
+                  onChangeText={v => update('weight', v)}
+                  focused={focused}
+                  setFocused={setFocused}
+                  theme={theme}
+                  extra={{ keyboardType: 'numeric' }}
+                />
               </View>
               <View style={{ width: 14 }} />
               <View style={{ flex: 1 }}>
-                <InputField label="Altura (cm)" field="height" placeholder="000" extra={{ keyboardType: 'numeric' }} />
+                <InputField
+                  label={t('editProfile.height')}
+                  field="height"
+                  placeholder={t('editProfile.heightPlaceholder')}
+                  value={form.height}
+                  onChangeText={v => update('height', v)}
+                  focused={focused}
+                  setFocused={setFocused}
+                  theme={theme}
+                  extra={{ keyboardType: 'numeric' }}
+                />
               </View>
             </View>
           </View>
@@ -379,7 +405,7 @@ export default function EditProfileScreen() {
             <ActivityIndicator color="#FFF" />
           ) : (
             <View style={s.saveBtnContent}>
-              <Text style={s.saveBtnText}>GUARDAR CAMBIOS</Text>
+              <Text style={s.saveBtnText}>{t('editProfile.saveChanges')}</Text>
               <MaterialCommunityIcons name="check" size={18} color="#FFF" style={s.buttonCheckIcon} />
             </View>
           )}
@@ -388,6 +414,28 @@ export default function EditProfileScreen() {
     </View>
   );
 }
+
+const InputField = ({
+  label, field, placeholder, value, onChangeText, focused, setFocused, theme, extra = {} as any
+}: { label: string; field: string; placeholder: string; value: string; onChangeText: (v: string) => void; focused: string | null; setFocused: (field: string | null) => void; theme: any; extra?: any }) => (
+  <View style={s.inputGroup}>
+    <Text style={[s.label, { color: theme.textSecondary }]}>{label}</Text>
+    <TextInput
+      style={[
+        s.input,
+        { backgroundColor: theme.card, color: theme.textPrimary, borderColor: focused === field ? theme.primary : theme.border },
+        extra.multiline && s.inputMulti,
+      ]}
+      value={value}
+      onChangeText={onChangeText}
+      placeholder={placeholder}
+      placeholderTextColor={theme.textMuted}
+      onFocus={() => setFocused(field)}
+      onBlur={() => setFocused(null)}
+      {...extra}
+    />
+  </View>
+);
 
 const s = StyleSheet.create({
   root:           { flex: 1 },

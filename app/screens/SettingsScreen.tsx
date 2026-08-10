@@ -2,6 +2,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import React, { useEffect, useState } from 'react';
 import {
+  Alert,
   Image,
   Platform,
   SafeAreaView,
@@ -15,6 +16,8 @@ import {
 import { useColors } from '../context/ThemeContext';
 import { storage } from '../../services/storage';
 import { getStorageUrl } from '../../services/api';
+import { useTranslation } from 'react-i18next';
+import { useRouter } from 'expo-router';
 
 interface RowProps {
   icon: string;
@@ -27,8 +30,38 @@ interface RowProps {
 
 export default function SettingsScreen() {
   const navigation = useNavigation<any>();
+  const router = useRouter();
   const { C, isDark, toggle } = useColors();
+  const { t, i18n } = useTranslation();
   const [user, setUser] = useState<{ name: string; email: string; avatar?: string } | null>(null);
+
+  const handleLogout = async () => {
+    if (Platform.OS === 'web') {
+      if (!window.confirm(t('settings.logoutConfirmMsg'))) return;
+    } else {
+      const confirmed = await new Promise<boolean>((resolve) => {
+        Alert.alert(t('settings.logoutConfirmTitle'), t('settings.logoutConfirmMsg'), [
+          { text: t('common.cancel'), onPress: () => resolve(false), style: 'cancel' },
+          { text: t('settings.logoutBtn'), onPress: () => resolve(true), style: 'destructive' },
+        ]);
+      });
+      if (!confirmed) return;
+    }
+    await storage.remove('token');
+    await storage.remove('user');
+    router.replace('/onboarding');
+  };
+
+  const toggleLanguage = async () => {
+    const currentLanguage = i18n.resolvedLanguage ?? i18n.language;
+    const nextLang = currentLanguage === 'es' ? 'en' : 'es';
+    try {
+      await storage.set('language', nextLang);
+      await i18n.changeLanguage(nextLang);
+    } catch (e) {
+      console.log('[i18n] Error saving language:', e);
+    }
+  };
 
   useEffect(() => {
     storage.get('user').then(raw => {
@@ -96,7 +129,7 @@ export default function SettingsScreen() {
               <MaterialCommunityIcons name="arrow-left" size={20} color={theme.textPrimary} />
             </TouchableOpacity>
             
-            <Text style={[s.headerTitle, { color: theme.textPrimary }]}>Ajustes</Text>
+            <Text style={[s.headerTitle, { color: theme.textPrimary }]}>{t('settings.title')}</Text>
             
             <View style={s.headerSpacer} />
           </View>
@@ -130,7 +163,7 @@ export default function SettingsScreen() {
         </TouchableOpacity>
 
         {/* APARIENCIA Group */}
-        <Text style={[s.groupLabel, { color: theme.textMuted }]}>APARIENCIA</Text>
+        <Text style={[s.groupLabel, { color: theme.textMuted }]}>{t('settings.appearance')}</Text>
         <View style={[s.group, { backgroundColor: theme.card, borderColor: theme.border }]}>
           <TouchableOpacity 
             style={s.row} 
@@ -145,7 +178,7 @@ export default function SettingsScreen() {
                   color={theme.accent} 
                 />
               </View>
-              <Text style={[s.rowLabel, { color: theme.textPrimary }]}>Modo Oscuro</Text>
+              <Text style={[s.rowLabel, { color: theme.textPrimary }]}>{t('settings.darkMode')}</Text>
             </View>
 
             <View style={[s.toggleContainer, { backgroundColor: isDark ? theme.accent : theme.border }]}>
@@ -155,56 +188,72 @@ export default function SettingsScreen() {
         </View>
 
         {/* PERFIL Group */}
-        <Text style={[s.groupLabel, { color: theme.textMuted }]}>PERFIL</Text>
+        <Text style={[s.groupLabel, { color: theme.textMuted }]}>{t('settings.profile')}</Text>
         <View style={[s.group, { backgroundColor: theme.card, borderColor: theme.border }]}>
           <Row 
             icon="account-edit-outline" 
-            label="Editar Perfil" 
+            label={t('settings.editProfile')}
             onPress={() => navigation.navigate('screens/EditProfileScreen')} 
             showDivider={true}
           />
           <Row 
             icon="shield-check-outline" 
-            label="Cuenta y Seguridad" 
+            label={t('settings.security')}
             onPress={() => navigation.navigate('screens/SecurityScreen')} 
           />
         </View>
 
         {/* PREFERENCIAS Group */}
-        <Text style={[s.groupLabel, { color: theme.textMuted }]}>PREFERENCIAS</Text>
+        <Text style={[s.groupLabel, { color: theme.textMuted }]}>{t('settings.preferences')}</Text>
         <View style={[s.group, { backgroundColor: theme.card, borderColor: theme.border }]}>
           <Row 
             icon="bell-ring-outline" 
-            label="Notificaciones" 
+            label={t('settings.notifications')}
             onPress={() => {}} 
             showDivider={true}
           />
           <Row 
             icon="translate" 
-            label="Idioma" 
-            value="Español" 
-            onPress={() => {}}
+            label={t('settings.language')}
+            value={i18n.resolvedLanguage === 'en' ? t('settings.english') : t('settings.spanish')}
+            onPress={toggleLanguage}
           />
         </View>
 
         {/* SOPORTE Group */}
-        <Text style={[s.groupLabel, { color: theme.textMuted }]}>SOPORTE</Text>
+        <Text style={[s.groupLabel, { color: theme.textMuted }]}>{t('settings.support')}</Text>
         <View style={[s.group, { backgroundColor: theme.card, borderColor: theme.border }]}>
           <Row 
             icon="help-circle-outline" 
-            label="Centro de Ayuda" 
+            label={t('settings.help')}
             onPress={() => {}} 
             showDivider={true}
           />
-          <Row 
+<Row 
             icon="file-document-outline" 
-            label="Términos y Privacidad" 
+            label={t('settings.privacy')}
             onPress={() => {}} 
           />
         </View>
 
+        {/* CUENTA / CERRAR SESIÓN Group */}
+        <Text style={[s.groupLabel, { color: '#EF4444AA' }]}>{t('settings.account')}</Text>
+        <View style={[s.group, { backgroundColor: theme.card, borderColor: theme.border }]}>
+          <TouchableOpacity
+            style={s.row}
+            onPress={handleLogout}
+            activeOpacity={0.7}
+          >
+            <View style={[s.rowIcon, { backgroundColor: '#EF444420' }]}>
+              <MaterialCommunityIcons name="logout" size={18} color="#EF4444" />
+            </View>
+            <Text style={[s.rowLabel, { color: '#EF4444', flex: 1 }]}>{t('settings.logout')}</Text>
+            <MaterialCommunityIcons name="chevron-right" size={20} color="#EF444460" />
+          </TouchableOpacity>
+        </View>
+
         {/* Footer Version */}
-        <Text style={[s.versionText, { color: theme.textMuted }]}>MUGEN v1.0.0</Text>
+        <Text style={[s.versionText, { color: theme.textMuted }]}>{t('settings.version')}</Text>
         <View style={s.bottomSpacer} />
       </ScrollView>
     </View>

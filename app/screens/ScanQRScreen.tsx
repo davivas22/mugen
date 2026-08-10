@@ -3,9 +3,11 @@ import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView } from 'react-na
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 
 export default function ScanQRScreen() {
   const router = useRouter();
+  const { t } = useTranslation();
   const [permission, requestPermission] = useCameraPermissions();
   const [scanned, setScanned] = useState(false);
 
@@ -14,9 +16,9 @@ export default function ScanQRScreen() {
   if (!permission.granted) {
     return (
       <SafeAreaView style={s.root}>
-        <Text style={s.permText}>Se necesita acceso a la cámara para escanear el QR.</Text>
+        <Text style={s.permText}>{t('scan.permissionText')}</Text>
         <TouchableOpacity style={s.permBtn} onPress={requestPermission}>
-          <Text style={s.permBtnText}>Dar permiso</Text>
+          <Text style={s.permBtnText}>{t('scan.grantPermission')}</Text>
         </TouchableOpacity>
       </SafeAreaView>
     );
@@ -47,7 +49,7 @@ export default function ScanQRScreen() {
 
         <View style={s.frame} />
 
-        <Text style={s.hint}>Apunta al código QR de la sala</Text>
+        <Text style={s.hint}>{t('scan.hint')}</Text>
       </View>
     </View>
   );

@@ -23,6 +23,7 @@ import MapView, { Marker } from "react-native-maps";
 import { storage } from "../../services/storage";
 import { useRouter } from "expo-router";
 import { challengeApi } from "../../services/api";
+import { useTranslation } from "react-i18next";
 
 // ─── Icons (using text-based icons compatible with Expo without extra libs) ───
 // If you have @expo/vector-icons installed, replace these with Ionicons/Feather
@@ -72,27 +73,6 @@ const BLACK = "#000000";
 
 const STEPS = ["INFO", "AJUSTES", "AVANZADO", "LISTO"];
 
-const CHALLENGE_MODES = [
-  {
-    id: "no_excuses",
-    label: "Sin Excusas",
-    description: "Máxima disciplina. Cada día cuenta, sin excepciones.",
-    icon: "shield",
-  },
-  {
-    id: "tracking",
-    label: "Seguimiento",
-    description: "Registro detallado de progreso y métricas diarias.",
-    icon: "zap",
-  },
-  {
-    id: "friendly",
-    label: "Amigable",
-    description: "Flexible y motivador, ideal para comenzar.",
-    icon: "heart",
-  },
-];
-
 const DAYS_OF_WEEK = ["L", "M", "X", "J", "V", "S", "D"];
 const MONTHS = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
 
@@ -107,6 +87,7 @@ interface ChallengeForm {
   useLocation: boolean;
   meetingPoint: string;
   useCamera: boolean;
+  isPrivate: boolean;
   gymLat: number | null;
   gymLng: number | null;
 }
@@ -247,26 +228,35 @@ const sb = StyleSheet.create({
 });
 
 // ─── Step Labels ─────────────────────────────────────────────────────────────
-const StepLabels = ({ current }: { current: number }) => (
-  <View style={{ flexDirection: "row", paddingHorizontal: 8, marginBottom: 8 }}>
-    {STEPS.map((label, i) => (
-      <Text
-        key={label}
-        style={{
-          flex: 1,
-          textAlign: "center",
-          fontSize: 9,
-          fontWeight: i === current ? "700" : "400",
-          color: i === current ? PINK : GRAY_400,
-          textTransform: "uppercase",
-          letterSpacing: 0.5,
-        }}
-      >
-        {label}
-      </Text>
-    ))}
-  </View>
-);
+const StepLabels = ({ current }: { current: number }) => {
+  const { t } = useTranslation();
+  const labels = [
+    t("createChallenge.stepInfo"),
+    t("createChallenge.stepSettings"),
+    t("createChallenge.stepAdvanced"),
+    t("createChallenge.stepReady"),
+  ];
+  return (
+    <View style={{ flexDirection: "row", paddingHorizontal: 8, marginBottom: 8 }}>
+      {labels.map((label, i) => (
+        <Text
+          key={label}
+          style={{
+            flex: 1,
+            textAlign: "center",
+            fontSize: 9,
+            fontWeight: i === current ? "700" : "400",
+            color: i === current ? PINK : GRAY_400,
+            textTransform: "uppercase",
+            letterSpacing: 0.5,
+          }}
+        >
+          {label}
+        </Text>
+      ))}
+    </View>
+  );
+};
 
 // ─── Field Components ─────────────────────────────────────────────────────────
 const FieldLabel = ({ children }: { children: string }) => (
@@ -316,15 +306,16 @@ const SectionCard = ({ children }: { children: React.ReactNode }) => (
 
 // ─── STEP 1: Información básica ───────────────────────────────────────────────
 const Step1 = ({ form, update }: { form: ChallengeForm; update: (k: keyof ChallengeForm, v: any) => void }) => {
+  const { t } = useTranslation();
 
   const pickImage = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== "granted") {
-      alert("Necesitas dar permiso para acceder a la galería.");
+      alert(t("createChallenge.galleryPermissionMsg"));
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ['images'],
       allowsEditing: true,
       aspect: [16, 9],
       quality: 0.8,
@@ -336,8 +327,8 @@ const Step1 = ({ form, update }: { form: ChallengeForm; update: (k: keyof Challe
 
   return (
     <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
-      <Text style={s.stepTitle}>Crea tu desafío</Text>
-      <Text style={s.stepSubtitle}>Define el nombre y una imagen de portada que inspire a tu comunidad.</Text>
+      <Text style={s.stepTitle}>{t("createChallenge.createTitle")}</Text>
+      <Text style={s.stepSubtitle}>{t("createChallenge.createDesc")}</Text>
 
       {/* Cover Image */}
       <TouchableOpacity
@@ -349,7 +340,7 @@ const Step1 = ({ form, update }: { form: ChallengeForm; update: (k: keyof Challe
           <View style={{ width: "100%", height: "100%" }}>
             <Image source={{ uri: form.coverImage }} style={{ width: "100%", height: "100%" }} resizeMode="cover" />
             <View style={{ position: "absolute", bottom: 8, right: 8, backgroundColor: "rgba(0,0,0,0.5)", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4 }}>
-              <Text style={{ fontSize: 11, color: "#fff", fontWeight: "600" }}>Cambiar</Text>
+              <Text style={{ fontSize: 11, color: "#fff", fontWeight: "600" }}>{t("createChallenge.change")}</Text>
             </View>
           </View>
         ) : (
@@ -357,17 +348,17 @@ const Step1 = ({ form, update }: { form: ChallengeForm; update: (k: keyof Challe
             <View style={s.coverPlaceholderIcon}>
               <Icon name="image" size={28} color={GRAY_400} />
             </View>
-            <Text style={{ fontSize: 13, color: GRAY_600, fontWeight: "600", marginTop: 8 }}>Foto de portada</Text>
-            <Text style={{ fontSize: 11, color: GRAY_400, marginTop: 2 }}>Toca para seleccionar</Text>
+            <Text style={{ fontSize: 13, color: GRAY_600, fontWeight: "600", marginTop: 8 }}>{t("createChallenge.coverPhoto")}</Text>
+            <Text style={{ fontSize: 11, color: GRAY_400, marginTop: 2 }}>{t("createChallenge.tapToSelect")}</Text>
           </View>
         )}
       </TouchableOpacity>
 
-      <FieldLabel>Nombre del desafío</FieldLabel>
+      <FieldLabel>{t("createChallenge.challengeName")}</FieldLabel>
       <InputField
         value={form.name}
         onChangeText={(t) => update("name", t)}
-        placeholder="Ej: Guerreros del gimnasio"
+        placeholder={t("createChallenge.challengeNamePlaceholder")}
       />
 
       <View style={{ marginTop: 8 }}>
@@ -381,8 +372,15 @@ const Step1 = ({ form, update }: { form: ChallengeForm; update: (k: keyof Challe
 
 // ─── STEP 2: Ajustes del desafío ──────────────────────────────────────────────
 const Step2 = ({ form, update }: { form: ChallengeForm; update: (k: keyof ChallengeForm, v: any) => void }) => {
+  const { t, i18n } = useTranslation();
   const DURATION_OPTIONS = [7, 14, 21, 30, 60, 90];
   const [showCalendar, setShowCalendar] = useState(false);
+
+  const isEn = i18n.resolvedLanguage?.toLowerCase().startsWith("en") ?? false;
+  const MONTHS_EN = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+  const months = isEn ? MONTHS_EN : MONTHS;
+  const DAYS_EN = ["M", "T", "W", "T", "F", "S", "S"];
+  const dayLetters = isEn ? DAYS_EN : DAYS_OF_WEEK;
 
   const toggleDay = (idx: number) => {
     const days = form.gymDaysPerWeek.includes(idx)
@@ -392,15 +390,15 @@ const Step2 = ({ form, update }: { form: ChallengeForm; update: (k: keyof Challe
   };
 
   const formatDate = (d: Date) =>
-    `${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
+    `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
 
   return (
     <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
-      <Text style={s.stepTitle}>Ajustes del desafío</Text>
-      <Text style={s.stepSubtitle}>Define la duración, fechas y los días de asistencia al gimnasio.</Text>
+      <Text style={s.stepTitle}>{t("createChallenge.settingsTitle")}</Text>
+      <Text style={s.stepSubtitle}>{t("createChallenge.settingsDesc")}</Text>
 
       {/* Duration */}
-      <FieldLabel>Duración del desafío</FieldLabel>
+      <FieldLabel>{t("createChallenge.duration")}</FieldLabel>
       <SectionCard>
         <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
           {DURATION_OPTIONS.map((d) => (
@@ -413,7 +411,7 @@ const Step2 = ({ form, update }: { form: ChallengeForm; update: (k: keyof Challe
               ]}
             >
               <Text style={[s.chipText, form.durationDays === d ? s.chipTextActive : s.chipTextInactive]}>
-                {d} días
+                {t("createChallenge.durationDays", { count: d })}
               </Text>
             </TouchableOpacity>
           ))}
@@ -421,7 +419,7 @@ const Step2 = ({ form, update }: { form: ChallengeForm; update: (k: keyof Challe
       </SectionCard>
 
       {/* Start Date */}
-      <FieldLabel>Fecha de inicio</FieldLabel>
+      <FieldLabel>{t("createChallenge.startDate")}</FieldLabel>
       <TouchableOpacity
         style={s.dateRow}
         onPress={() => setShowCalendar(!showCalendar)}
@@ -447,13 +445,13 @@ const Step2 = ({ form, update }: { form: ChallengeForm; update: (k: keyof Challe
       )}
 
       {/* Gym days */}
-      <FieldLabel>Días de asistencia al gimnasio</FieldLabel>
+      <FieldLabel>{t("createChallenge.gymDays")}</FieldLabel>
       <SectionCard>
         <Text style={{ fontSize: 12, color: GRAY_400, marginBottom: 14 }}>
-          Selecciona los días que contarán como asistencia
+          {t("createChallenge.gymDaysHelper")}
         </Text>
         <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-          {DAYS_OF_WEEK.map((day, idx) => (
+          {dayLetters.map((day, idx) => (
             <TouchableOpacity
               key={idx}
               onPress={() => toggleDay(idx)}
@@ -476,8 +474,8 @@ const Step2 = ({ form, update }: { form: ChallengeForm; update: (k: keyof Challe
         <View style={{ marginTop: 14, paddingTop: 14, borderTopWidth: 1, borderTopColor: GRAY_200 }}>
           <Text style={{ fontSize: 12, color: GRAY_400 }}>
             {form.gymDaysPerWeek.length === 0
-              ? "Ningún día seleccionado"
-              : `${form.gymDaysPerWeek.length} día${form.gymDaysPerWeek.length > 1 ? "s" : ""} por semana`}
+              ? t("createChallenge.noDaysSelected")
+              : t("createChallenge.daysPerWeek", { count: form.gymDaysPerWeek.length })}
           </Text>
         </View>
       </SectionCard>
@@ -499,6 +497,7 @@ const MapPickerModal = ({
   onConfirm: (lat: number, lng: number) => void;
   onClose: () => void;
 }) => {
+  const { t } = useTranslation();
   const [center, setCenter] = useState({ lat: initialLat, lng: initialLng });
 
   return (
@@ -508,23 +507,23 @@ const MapPickerModal = ({
         <SafeAreaView style={{ backgroundColor: "#1a1a1a" }}>
           <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 12 }}>
             <TouchableOpacity onPress={onClose} style={{ paddingRight: 16 }}>
-              <Text style={{ color: "#aaa", fontSize: 15 }}>Cancelar</Text>
+              <Text style={{ color: "#aaa", fontSize: 15 }}>{t("createChallenge.cancel")}</Text>
             </TouchableOpacity>
             <Text style={{ flex: 1, textAlign: "center", color: "#fff", fontWeight: "700", fontSize: 16 }}>
-              Ubicación del gym
+              {t("createChallenge.gymLocation")}
             </Text>
             <TouchableOpacity
               onPress={() => onConfirm(center.lat, center.lng)}
               style={{ paddingLeft: 16 }}
             >
-              <Text style={{ color: PINK, fontSize: 15, fontWeight: "700" }}>Confirmar</Text>
+              <Text style={{ color: PINK, fontSize: 15, fontWeight: "700" }}>{t("createChallenge.confirm")}</Text>
             </TouchableOpacity>
           </View>
         </SafeAreaView>
 
         {/* Hint */}
         <View style={{ backgroundColor: "#222", paddingVertical: 8, alignItems: "center" }}>
-          <Text style={{ color: "#ccc", fontSize: 12 }}>Mueve el mapa para centrar el pin en el gym</Text>
+          <Text style={{ color: "#ccc", fontSize: 12 }}>{t("createChallenge.mapHint")}</Text>
         </View>
 
         {/* Map + crosshair pin fijo */}
@@ -584,6 +583,7 @@ const MapPickerModal = ({
 
 // ─── STEP 3: Opciones avanzadas ───────────────────────────────────────────────
 const Step3 = ({ form, update }: { form: ChallengeForm; update: (k: keyof ChallengeForm, v: any) => void }) => {
+  const { t } = useTranslation();
   const [loadingLocation, setLoadingLocation] = useState(false);
   const [showMap, setShowMap] = useState(false);
   const [mapCenter, setMapCenter] = useState({ lat: 13.7109, lng: -89.1397 });
@@ -624,37 +624,40 @@ const Step3 = ({ form, update }: { form: ChallengeForm; update: (k: keyof Challe
       />
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
-        <Text style={s.stepTitle}>Opciones avanzadas</Text>
-        <Text style={s.stepSubtitle}>Configura el modo del desafío y el sistema de verificación de asistencia.</Text>
+        <Text style={s.stepTitle}>{t("createChallenge.advancedTitle")}</Text>
+        <Text style={s.stepSubtitle}>{t("createChallenge.advancedDesc")}</Text>
 
-        {/* Challenge Mode */}
-        <FieldLabel>Modo del desafío</FieldLabel>
-        {CHALLENGE_MODES.map((mode) => (
+        {/* Privacidad */}
+        <FieldLabel>{t("createChallenge.privacy")}</FieldLabel>
+        {([
+          { id: false, label: t("createChallenge.public"), desc: t("createChallenge.publicDesc"), icon: "users" },
+          { id: true,  label: t("createChallenge.private"), desc: t("createChallenge.privateDesc"), icon: "lock" },
+        ]).map((vis) => (
           <TouchableOpacity
-            key={mode.id}
-            onPress={() => update("challengeMode", mode.id)}
-            style={[s.modeCard, form.challengeMode === mode.id ? s.modeCardActive : s.modeCardInactive]}
+            key={String(vis.id)}
+            onPress={() => update("isPrivate", vis.id)}
+            style={[s.modeCard, form.isPrivate === vis.id ? s.modeCardActive : s.modeCardInactive]}
             activeOpacity={0.85}
           >
-            <View style={[s.modeIconWrap, form.challengeMode === mode.id ? { backgroundColor: PINK } : { backgroundColor: GRAY_200 }]}>
-              <Icon name={mode.icon} size={18} color={form.challengeMode === mode.id ? WHITE : GRAY_600} />
+            <View style={[s.modeIconWrap, form.isPrivate === vis.id ? { backgroundColor: PINK } : { backgroundColor: GRAY_200 }]}>
+              <Icon name={vis.icon} size={18} color={form.isPrivate === vis.id ? WHITE : GRAY_600} />
             </View>
             <View style={{ flex: 1, marginLeft: 14 }}>
-              <Text style={[s.modeName, form.challengeMode === mode.id ? { color: PINK } : { color: GRAY_800 }]}>
-                {mode.label}
+              <Text style={[s.modeName, form.isPrivate === vis.id ? { color: PINK } : { color: GRAY_800 }]}>
+                {vis.label}
               </Text>
-              <Text style={s.modeDesc}>{mode.description}</Text>
+              <Text style={s.modeDesc}>{vis.desc}</Text>
             </View>
-            <View style={[s.modeRadio, form.challengeMode === mode.id ? { borderColor: PINK } : { borderColor: GRAY_400 }]}>
-              {form.challengeMode === mode.id && <View style={s.modeRadioInner} />}
+            <View style={[s.modeRadio, form.isPrivate === vis.id ? { borderColor: PINK } : { borderColor: GRAY_400 }]}>
+              {form.isPrivate === vis.id && <View style={s.modeRadioInner} />}
             </View>
           </TouchableOpacity>
         ))}
 
         {/* Verificación de asistencia */}
-        <FieldLabel>Verificación de asistencia</FieldLabel>
+        <FieldLabel>{t("createChallenge.verification")}</FieldLabel>
         <Text style={{ fontSize: 12, color: GRAY_400, marginBottom: 12 }}>
-          Elige cómo los participantes demostrarán su asistencia diaria
+          {t("createChallenge.verificationDesc")}
         </Text>
 
         {/* Location option */}
@@ -664,9 +667,9 @@ const Step3 = ({ form, update }: { form: ChallengeForm; update: (k: keyof Challe
               <Icon name="map" size={18} color={form.useLocation ? PINK : GRAY_400} />
             </View>
             <View style={{ flex: 1, marginLeft: 14 }}>
-              <Text style={s.optionTitle}>Localización mutua</Text>
+              <Text style={s.optionTitle}>{t("createChallenge.mutualLocation")}</Text>
               <Text style={s.optionDesc}>
-                Define un punto de reunión. Los participantes deben estar presentes para contar asistencia.
+                {t("createChallenge.mutualLocationDesc")}
               </Text>
             </View>
             <Switch
@@ -683,7 +686,7 @@ const Step3 = ({ form, update }: { form: ChallengeForm; update: (k: keyof Challe
           {form.useLocation && (
             <View style={{ marginTop: 16, paddingTop: 16, borderTopWidth: 1, borderTopColor: GRAY_200 }}>
               <Text style={{ fontSize: 12, fontWeight: "600", color: GRAY_600, marginBottom: 10 }}>
-                Punto de reunión
+                {t("createChallenge.meetingPoint")}
               </Text>
 
               {form.gymLat ? (
@@ -715,7 +718,7 @@ const Step3 = ({ form, update }: { form: ChallengeForm; update: (k: keyof Challe
                     <Text style={{ flex: 1, fontSize: 12, color: "#166534", fontWeight: "600" }}>
                       {form.gymLat.toFixed(5)}, {form.gymLng?.toFixed(5)}
                     </Text>
-                    <Text style={{ fontSize: 12, color: "#16A34A", fontWeight: "700" }}>Cambiar</Text>
+                    <Text style={{ fontSize: 12, color: "#16A34A", fontWeight: "700" }}>{t("createChallenge.change")}</Text>
                   </View>
                 </TouchableOpacity>
               ) : (
@@ -734,10 +737,10 @@ const Step3 = ({ form, update }: { form: ChallengeForm; update: (k: keyof Challe
                         <Icon name="map" size={22} color={PINK} />
                       </View>
                       <Text style={{ fontSize: 13, fontWeight: "700", color: GRAY_800 }}>
-                        Seleccionar en el mapa
+                        {t("createChallenge.selectOnMap")}
                       </Text>
                       <Text style={{ fontSize: 11, color: GRAY_400, marginTop: 4, textAlign: "center" }}>
-                        Toca para abrir el mapa y fijar el punto del gym
+                        {t("createChallenge.selectOnMapDesc")}
                       </Text>
                     </>
                   )}
@@ -754,9 +757,9 @@ const Step3 = ({ form, update }: { form: ChallengeForm; update: (k: keyof Challe
               <Icon name="camera" size={18} color={form.useCamera ? PINK : GRAY_400} />
             </View>
             <View style={{ flex: 1, marginLeft: 14 }}>
-              <Text style={s.optionTitle}>Foto de asistencia</Text>
+              <Text style={s.optionTitle}>{t("createChallenge.photoAttendance")}</Text>
               <Text style={s.optionDesc}>
-                Los participantes deben tomar una foto en el momento. Solo cámara directa, sin galería.
+                {t("createChallenge.photoDesc")}
               </Text>
             </View>
             <Switch
@@ -776,7 +779,7 @@ const Step3 = ({ form, update }: { form: ChallengeForm; update: (k: keyof Challe
                 <Icon name="lock" size={14} color={PINK} />
               </View>
               <Text style={{ flex: 1, fontSize: 12, color: GRAY_600, lineHeight: 18 }}>
-                Solo se permite el uso de la cámara en tiempo real. El acceso a la galería queda deshabilitado para garantizar la autenticidad de la asistencia.
+                {t("createChallenge.photoNote")}
               </Text>
             </View>
           )}
@@ -786,7 +789,7 @@ const Step3 = ({ form, update }: { form: ChallengeForm; update: (k: keyof Challe
           <View style={{ backgroundColor: "#FFF8E1", borderRadius: 12, padding: 14, marginTop: 12, flexDirection: "row", alignItems: "center" }}>
             <Icon name="flag" size={16} color="#F59E0B" />
             <Text style={{ flex: 1, fontSize: 12, color: "#92400E", marginLeft: 10, lineHeight: 18 }}>
-              Sin verificación activa. Se recomienda activar al menos una opción para garantizar la integridad del desafío.
+              {t("createChallenge.noVerification")}
             </Text>
           </View>
         )}
@@ -797,65 +800,79 @@ const Step3 = ({ form, update }: { form: ChallengeForm; update: (k: keyof Challe
 
 // ─── STEP 4: Confirmación ─────────────────────────────────────────────────────
 const Step4 = ({ form }: { form: ChallengeForm }) => {
+  const { t, i18n } = useTranslation();
+  const isEn = i18n.resolvedLanguage?.toLowerCase().startsWith("en") ?? false;
+  const MONTHS_EN = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+  const DAYS_EN = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+  const DAYS_ES = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
+
   const formatDate = (d: Date) =>
-    `${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
+    isEn
+      ? d.toLocaleDateString("en-US", { day: "numeric", month: "long", year: "numeric" })
+      : `${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
 
   const endDate = new Date(form.startDate);
   endDate.setDate(endDate.getDate() + form.durationDays);
 
-  const mode = CHALLENGE_MODES.find((m) => m.id === form.challengeMode);
+  const dayNames = isEn ? DAYS_EN : DAYS_ES;
   const selectedDayNames = form.gymDaysPerWeek
     .sort()
-    .map((i) => ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"][i])
+    .map((i) => dayNames[i])
     .join(", ");
 
   return (
     <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
-      <Text style={s.stepTitle}>Todo listo</Text>
-      <Text style={s.stepSubtitle}>Revisa los detalles de tu desafío antes de publicarlo.</Text>
+      <Text style={s.stepTitle}>{t("createChallenge.readyTitle")}</Text>
+      <Text style={s.stepSubtitle}>{t("createChallenge.readyDesc")}</Text>
 
       {/* Cover preview */}
       <View style={s.previewCover}>
         <View style={{ alignItems: "center" }}>
           <Icon name="image" size={32} color={form.coverImage ? PINK : GRAY_400} />
           <Text style={{ fontSize: 20, fontWeight: "700", color: WHITE, marginTop: 12, textAlign: "center" }}>
-            {form.name || "Sin nombre"}
+            {form.name || t("createChallenge.noName")}
           </Text>
         </View>
       </View>
 
       {/* Summary cards */}
       <SectionCard>
-        <SummaryRow icon="clock" label="Duración" value={`${form.durationDays} días`} />
-        <SummaryRow icon="calendar" label="Inicio" value={formatDate(form.startDate)} />
-        <SummaryRow icon="calendar" label="Fin estimado" value={formatDate(endDate)} />
+        <SummaryRow icon="clock" label={t("createChallenge.summaryDuration")} value={t("createChallenge.durationDays", { count: form.durationDays })} />
+        <SummaryRow icon="calendar" label={t("createChallenge.summaryStart")} value={formatDate(form.startDate)} />
+        <SummaryRow icon="calendar" label={t("createChallenge.summaryEnd")} value={formatDate(endDate)} />
         <SummaryRow
           icon="dumbbell"
-          label="Días de gym"
-          value={selectedDayNames || "No definidos"}
+          label={t("createChallenge.summaryGymDays")}
+          value={selectedDayNames || t("createChallenge.notDefined")}
           last
         />
       </SectionCard>
 
       <SectionCard>
-        <SummaryRow icon={mode?.icon || "star"} label="Modo" value={mode?.label || "-"} />
+        <SummaryRow
+          icon={form.isPrivate ? "lock" : "users"}
+          label={t("createChallenge.privacy")}
+          value={form.isPrivate ? t("createChallenge.private") : t("createChallenge.public")}
+        />
         <SummaryRow
           icon="map"
-          label="Localización"
-          value={form.useLocation ? "Activada" : "Desactivada"}
+          label={t("createChallenge.location")}
+          value={form.useLocation ? t("createChallenge.enabled") : t("createChallenge.disabled")}
         />
         <SummaryRow
           icon="camera"
-          label="Foto de asistencia"
-          value={form.useCamera ? "Activada" : "Desactivada"}
+          label={t("createChallenge.photoAttendance")}
+          value={form.useCamera ? t("createChallenge.enabled") : t("createChallenge.disabled")}
           last
         />
       </SectionCard>
 
       <View style={s.publishNote}>
-        <Icon name="users" size={16} color={PINK} />
+        <Icon name={form.isPrivate ? "lock" : "users"} size={16} color={PINK} />
         <Text style={{ flex: 1, fontSize: 12, color: GRAY_600, marginLeft: 10, lineHeight: 18 }}>
-          Al publicar el desafío, otros usuarios de Mugen podrán encontrarlo y unirse.
+          {form.isPrivate
+            ? t("createChallenge.privateNote")
+            : t("createChallenge.publicNote")}
         </Text>
       </View>
     </ScrollView>
@@ -885,6 +902,7 @@ const SummaryRow = ({
 // ─── MAIN SCREEN ──────────────────────────────────────────────────────────────
 export default function CreateChallengeScreen() {
   const router = useRouter();
+  const { t } = useTranslation();
   const [step, setStep] = useState(0);
   const [form, setForm] = useState<ChallengeForm>({
     name: "",
@@ -896,6 +914,7 @@ export default function CreateChallengeScreen() {
     useLocation: false,
     meetingPoint: "",
     useCamera: false,
+    isPrivate: false,
     gymLat: null,
     gymLng: null,
   });
@@ -936,8 +955,8 @@ export default function CreateChallengeScreen() {
       console.log("[SUBMIT] ERROR:", error?.message);
       console.log("[SUBMIT] status:", error?.response?.status);
       console.log("[SUBMIT] data:", JSON.stringify(error?.response?.data));
-      const msg = error?.response?.data?.message || "No se pudo crear el desafío. Intenta de nuevo.";
-      Alert.alert("Error", msg);
+      const msg = error?.response?.data?.message || t("createChallenge.submitError");
+      Alert.alert(t("common.error"), msg);
     } finally {
       setSubmitting(false);
     }
@@ -945,7 +964,7 @@ export default function CreateChallengeScreen() {
 
   const shareInvite = (code: string, name: string) => {
     Share.share({
-      message: `¡Únete a mi sala "${name}" en Mugen! 💪\nUsa el código: ${code}\nDescarga la app y ve a Salas → Unirse con código.`,
+      message: t("createChallenge.shareInviteMsg", { name, code }),
     });
   };
 
@@ -980,7 +999,7 @@ export default function CreateChallengeScreen() {
         <TouchableOpacity onPress={back} style={s.headerBtn} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
           <Icon name={step === 0 ? "close" : "chevronLeft"} size={step === 0 ? 14 : 22} color={GRAY_800} />
         </TouchableOpacity>
-        <Text style={s.headerTitle}>Nuevo desafío</Text>
+        <Text style={s.headerTitle}>{t("createChallenge.title")}</Text>
         <View style={s.headerBtn} />
       </View>
 
@@ -1005,7 +1024,7 @@ export default function CreateChallengeScreen() {
         {step > 0 && (
           <TouchableOpacity onPress={back} style={s.backBtn} activeOpacity={0.8}>
             <Icon name="chevronLeft" size={18} color={GRAY_600} />
-            <Text style={s.backBtnText}>Atrás</Text>
+            <Text style={s.backBtnText}>{t("createChallenge.back")}</Text>
           </TouchableOpacity>
         )}
         <TouchableOpacity
@@ -1019,7 +1038,7 @@ export default function CreateChallengeScreen() {
           ) : (
             <>
               <Text style={s.nextBtnText}>
-                {step === STEPS.length - 1 ? "Publicar desafío" : "Siguiente"}
+                {step === STEPS.length - 1 ? t("createChallenge.publish") : t("createChallenge.next")}
               </Text>
               {step < STEPS.length - 1 && <Icon name="chevronRight" size={18} color={WHITE} />}
             </>
@@ -1032,8 +1051,8 @@ export default function CreateChallengeScreen() {
           <View style={inv.overlay}>
             <View style={inv.sheet}>
               <Text style={inv.emoji}>🎉</Text>
-              <Text style={inv.title}>¡Sala creada!</Text>
-              <Text style={inv.subtitle}>Comparte este código con tus amigos para que se unan</Text>
+              <Text style={inv.title}>{t("createChallenge.roomCreated")}</Text>
+              <Text style={inv.subtitle}>{t("createChallenge.shareCode")}</Text>
 
               {/* Código */}
               <View style={inv.codeBox}>
@@ -1045,7 +1064,7 @@ export default function CreateChallengeScreen() {
                 source={{ uri: `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=MUGEN-${inviteModal.code}&bgcolor=ffffff&color=FF2E63&qzone=2` }}
                 style={inv.qr}
               />
-              <Text style={inv.qrHint}>Tus amigos pueden escanear este QR desde la app</Text>
+              <Text style={inv.qrHint}>{t("createChallenge.shareQr")}</Text>
 
               {/* Botones */}
               <TouchableOpacity
@@ -1053,14 +1072,14 @@ export default function CreateChallengeScreen() {
                 onPress={() => shareInvite(inviteModal.code, inviteModal.name)}
                 activeOpacity={0.85}
               >
-                <Text style={inv.shareBtnText}>Compartir invitación</Text>
+                <Text style={inv.shareBtnText}>{t("createChallenge.shareInvite")}</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
                 style={inv.doneBtn}
                 onPress={() => { setInviteModal(null); router.back(); }}
               >
-                <Text style={inv.doneBtnText}>Ir a mis salas</Text>
+                <Text style={inv.doneBtnText}>{t("createChallenge.goToRooms")}</Text>
               </TouchableOpacity>
             </View>
           </View>

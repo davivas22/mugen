@@ -25,6 +25,7 @@ import { useColors } from '../context/ThemeContext';
 import { userApi, challengeApi, messageApi, feedApi, getStorageUrl } from '../../services/api';
 import { storage } from '../../services/storage';
 import { registerForPushNotifications } from '../../services/notifications';
+import { useTranslation } from 'react-i18next';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const ACCENT = '#FF0066';
@@ -88,6 +89,7 @@ export default function DashboardScreen() {
   const insets = useSafeAreaInsets();
   const router  = useRouter();
   const { isDark, toggle } = useColors();
+  const { t } = useTranslation();
 
   const [fontsLoaded] = useFonts({
     BarlowCondensed_400Regular,
@@ -272,10 +274,10 @@ export default function DashboardScreen() {
 
   // ─── Quick action buttons ───────────────────────────────────────────────────
   const ACTIONS: { icon: IoniconName; label: string; onPress: () => void }[] = [
-    { icon: 'qr-code-outline',    label: 'Scan QR',     onPress: () => router.push('/screens/ScanQRScreen' as never) },
-    { icon: 'trophy-outline',     label: 'Leaderboard', onPress: () => router.push('/ranking' as never) },
-    { icon: 'add-circle-outline', label: 'Nueva Sala',  onPress: () => router.push('/salas' as never) },
-    { icon: 'people-outline',     label: 'Mis Salas',   onPress: () => router.push('/salas' as never) },
+    { icon: 'qr-code-outline',    label: t('dashboard.actions.scanQr'),      onPress: () => router.push('/screens/ScanQRScreen' as never) },
+    { icon: 'trophy-outline',     label: t('dashboard.actions.leaderboard'), onPress: () => router.push('/ranking' as never) },
+    { icon: 'add-circle-outline', label: t('dashboard.actions.newRoom'),     onPress: () => router.push('/salas' as never) },
+    { icon: 'people-outline',     label: t('dashboard.actions.myRooms'),     onPress: () => router.push('/salas' as never) },
   ];
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -309,7 +311,7 @@ export default function DashboardScreen() {
                 )}
               </View>
               <View>
-                <Text style={s.hiLabel}>Hola,</Text>
+                <Text style={s.hiLabel}>{t('dashboard.greeting')}</Text>
                 <Text style={[s.hiName, bf('700')]}>{firstName}</Text>
               </View>
             </Pressable>
@@ -332,7 +334,7 @@ export default function DashboardScreen() {
           </View>
 
           <Pressable onPress={() => router.push('/ranking' as never)} style={{ marginTop: 8 }}>
-            <Text style={s.rankLink}>Ranking esta semana →</Text>
+            <Text style={s.rankLink}>{t('dashboard.weeklyRanking')}</Text>
           </Pressable>
         </View>
 
@@ -370,7 +372,7 @@ export default function DashboardScreen() {
           )}
 
           {/* ── CALENDARIO ─────────────────────────────────────────────── */}
-          <Text style={[s.sectionLabel, { color: C.textSub }]}>ESTA SEMANA</Text>
+          <Text style={[s.sectionLabel, { color: C.textSub }]}>{t('dashboard.thisWeek')}</Text>
           <View style={[s.calCard, cardShadow, { backgroundColor: C.cardBg }]}>
             <View style={s.calRow}>
               {DAYS.map((day, i) => {
@@ -395,7 +397,7 @@ export default function DashboardScreen() {
           </View>
 
           {/* ── SALAS + ACCIONES ───────────────────────────────────────── */}
-          <Text style={[s.sectionLabel, { color: C.textSub, marginTop: 20 }]}>MIS SALAS</Text>
+          <Text style={[s.sectionLabel, { color: C.textSub, marginTop: 20 }]}>{t('dashboard.myRooms')}</Text>
           <View style={[s.bigCard, cardShadow, { backgroundColor: C.cardBg }]}>
 
             <ScrollView
@@ -411,7 +413,7 @@ export default function DashboardScreen() {
                   onPress={() => router.push('/salas' as never)}
                 >
                   <MaterialCommunityIcons name="plus" size={22} color={ACCENT} />
-                  <Text style={[s.roomBtnTxt, { color: ACCENT }]}>Crear{'\n'}sala</Text>
+                  <Text style={[s.roomBtnTxt, { color: ACCENT }]}>{t('dashboard.createRoom')}</Text>
                 </Pressable>
               ) : (
                 challenges.slice(0, 6).map(ch => {
@@ -446,15 +448,15 @@ export default function DashboardScreen() {
               {/* ── Miembros ─────────────────────────────────────────── */}
               <View style={s.membersCol}>
                 <Text style={[s.colTitle, { color: C.textSub }]}>
-                  {selectedChallenge ? `MIEMBROS (${roomMembers.length})` : 'MIEMBROS'}
+                  {selectedChallenge ? t('dashboard.membersWithCount', { count: roomMembers.length }) : t('dashboard.members')}
                 </Text>
 
                 {membersLoading ? (
                   <ActivityIndicator color={ACCENT} size="small" style={{ marginTop: 12 }} />
                 ) : !selectedChallenge ? (
-                  <Text style={[s.emptyHint, { color: C.textSub }]}>Selecciona{'\n'}una sala</Text>
+                  <Text style={[s.emptyHint, { color: C.textSub }]}>{t('dashboard.selectRoom')}</Text>
                 ) : roomMembers.length === 0 ? (
-                  <Text style={[s.emptyHint, { color: C.textSub }]}>Sin{'\n'}miembros</Text>
+                  <Text style={[s.emptyHint, { color: C.textSub }]}>{t('dashboard.noMembers')}</Text>
                 ) : (
                   <View style={s.avatarGrid}>
                     {roomMembers.slice(0, 4).map(m => {
@@ -486,7 +488,7 @@ export default function DashboardScreen() {
 
               {/* ── Acciones ─────────────────────────────────────────── */}
               <View style={s.actionsCol}>
-                <Text style={[s.colTitle, { color: C.textSub }]}>ACCIONES</Text>
+                <Text style={[s.colTitle, { color: C.textSub }]}>{t('dashboard.actionsTitle')}</Text>
                 {ACTIONS.map(({ icon, label, onPress }) => (
                   <Pressable key={label} style={s.actionRow} onPress={onPress}>
                     <View style={[s.actionIcon, { backgroundColor: C.accentFg }]}>
@@ -503,7 +505,7 @@ export default function DashboardScreen() {
           {/* ── FEED DE ACTIVIDAD ─────────────────────────────────────── */}
           {feedItems.length > 0 && (
             <>
-              <Text style={[s.sectionLabel, { color: C.textSub, marginTop: 20 }]}>ACTIVIDAD RECIENTE</Text>
+              <Text style={[s.sectionLabel, { color: C.textSub, marginTop: 20 }]}>{t('dashboard.recentActivity')}</Text>
               <View style={[s.feedCard, cardShadow, { backgroundColor: C.cardBg }]}>
                 {feedItems.slice(0, 8).map((item, idx) => {
                   const avatarUrl = item.user_avatar ? getStorageUrl(item.user_avatar) : null;

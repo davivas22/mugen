@@ -7,14 +7,20 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useColors } from '../context/ThemeContext';
+import { useTranslation } from 'react-i18next';
 
-const FILTERS = ['Todas', 'Elite', 'Intermedio', 'Principiante'];
+const FILTERS = [
+  { key: 'all',    label: 'rooms.filters.all' },
+  { key: 'elite',  label: 'rooms.filters.elite' },
+  { key: 'mid',    label: 'rooms.filters.intermediate' },
+  { key: 'beginner', label: 'rooms.filters.beginner' },
+];
 
 const ROOMS = [
-  { id: '1', name: 'Titanes del CrossFit',   image: 'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?q=80&w=800', participants: 124, level: 'Elite',         active: true,  challenge: '100 Burpees hoy' },
-  { id: '2', name: 'Boxeo Nocturno',          image: 'https://images.unsplash.com/photo-1549719386-74dfcbf7dbed?q=80&w=800', participants: 85,  level: 'Intermedio',    active: true,  challenge: 'Sparring virtual' },
-  { id: '3', name: 'Yoga Flow & Mindfulness', image: 'https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?q=80&w=800', participants: 42,  level: 'Principiante',  active: false, challenge: 'Reto de flexibilidad' },
-  { id: '4', name: 'Fuerza & Potencia',       image: 'https://images.unsplash.com/photo-1581009146145-b5ef050c2e1e?q=80&w=800', participants: 98, level: 'Elite',         active: true,  challenge: 'PR en sentadilla' },
+  { id: '1', name: 'Titanes del CrossFit',   image: 'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?q=80&w=800', participants: 124, level: 'elite',       active: true,  challenge: '100 Burpees hoy' },
+  { id: '2', name: 'Boxeo Nocturno',          image: 'https://images.unsplash.com/photo-1549719386-74dfcbf7dbed?q=80&w=800', participants: 85,  level: 'mid',  active: true,  challenge: 'Sparring virtual' },
+  { id: '3', name: 'Yoga Flow & Mindfulness', image: 'https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?q=80&w=800', participants: 42,  level: 'beginner', active: false, challenge: 'Reto de flexibilidad' },
+  { id: '4', name: 'Fuerza & Potencia',       image: 'https://images.unsplash.com/photo-1581009146145-b5ef050c2e1e?q=80&w=800', participants: 98, level: 'elite', active: true,  challenge: 'PR en sentadilla' },
 ];
 
 const CHALLENGES = [
@@ -24,16 +30,21 @@ const CHALLENGES = [
   { id: '4', title: 'Plancha 3min',reward: '+300 MC',    icon: 'arm-flex', color: '#7C3AED' },
 ];
 
+const LEVEL_LABELS: Record<string, string> = {
+  elite: 'rooms.filters.elite', mid: 'rooms.filters.intermediate', beginner: 'rooms.filters.beginner',
+};
+
 const LEVEL_COLORS: Record<string, string> = {
-  Elite: '#FF2E63', Intermedio: '#00D4FF', Principiante: '#00D395',
+  elite: '#FF2E63', mid: '#00D4FF', beginner: '#00D395',
 };
 
 export default function RoomsScreen() {
-  const [filter, setFilter] = useState('Todas');
+  const [filter, setFilter] = useState('all');
   const router = useRouter();
   const { C } = useColors();
+  const { t } = useTranslation();
 
-  const filtered = filter === 'Todas' ? ROOMS : ROOMS.filter(r => r.level === filter);
+  const filtered = filter === 'all' ? ROOMS : ROOMS.filter(r => r.level === filter);
 
   return (
     <View style={[s.root, { backgroundColor: C.bg }]}>
@@ -48,15 +59,15 @@ export default function RoomsScreen() {
           <>
             <View style={[s.header, { paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight ?? 0) + 12 : 56 }]}>
               <View>
-                <Text style={[s.title, { color: C.textPrimary }]}>Salas</Text>
-                <Text style={[s.subtitle, { color: C.textSecondary }]}>Elige tu batalla</Text>
+                <Text style={[s.title, { color: C.textPrimary }]}>{t('rooms.title')}</Text>
+                <Text style={[s.subtitle, { color: C.textSecondary }]}>{t('rooms.subtitle')}</Text>
               </View>
               <TouchableOpacity style={[s.searchBtn, { backgroundColor: C.card, borderColor: C.border }]}>
                 <MaterialCommunityIcons name="magnify" size={22} color={C.textPrimary} />
               </TouchableOpacity>
             </View>
 
-            <Text style={[s.sectionTitle, { color: C.textPrimary }]}>Retos semanales</Text>
+            <Text style={[s.sectionTitle, { color: C.textPrimary }]}>{t('rooms.weeklyChallenges')}</Text>
             <FlatList
               data={CHALLENGES}
               horizontal showsHorizontalScrollIndicator={false}
@@ -64,7 +75,7 @@ export default function RoomsScreen() {
               contentContainerStyle={s.challengeList}
               renderItem={({ item }) => (
                 <TouchableOpacity style={[s.challengeCard, { backgroundColor: C.card, borderColor: C.border }]} activeOpacity={0.8}>
-                  <LinearGradient colors={[item.color + '25', item.color + '08']} style={StyleSheet.absoluteFill} borderRadius={20} />
+                  <LinearGradient colors={[item.color + '25', item.color + '08']} style={[StyleSheet.absoluteFill, { borderRadius: 20 }]} />
                   <View style={[s.challengeIcon, { backgroundColor: item.color + '20' }]}>
                     <MaterialCommunityIcons name={item.icon as any} size={22} color={item.color} />
                   </View>
@@ -77,17 +88,17 @@ export default function RoomsScreen() {
             <View style={s.filtersRow}>
               {FILTERS.map(f => (
                 <TouchableOpacity
-                  key={f}
-                  onPress={() => setFilter(f)}
-                  style={[s.chip, { backgroundColor: filter === f ? C.mugenPink : C.card, borderColor: filter === f ? C.mugenPink : C.border }]}
+                  key={f.key}
+                  onPress={() => setFilter(f.key)}
+                  style={[s.chip, { backgroundColor: filter === f.key ? C.mugenPink : C.card, borderColor: filter === f.key ? C.mugenPink : C.border }]}
                   activeOpacity={0.7}
                 >
-                  <Text style={[s.chipText, { color: filter === f ? '#FFF' : C.textSecondary }]}>{f}</Text>
+                  <Text style={[s.chipText, { color: filter === f.key ? '#FFF' : C.textSecondary }]}>{t(f.label)}</Text>
                 </TouchableOpacity>
               ))}
             </View>
 
-            <Text style={[s.sectionTitle, { color: C.textPrimary }]}>Salas activas</Text>
+            <Text style={[s.sectionTitle, { color: C.textPrimary }]}>{t('rooms.activeRooms')}</Text>
           </>
         }
         renderItem={({ item }) => (
@@ -97,11 +108,11 @@ export default function RoomsScreen() {
             {item.active && (
               <View style={s.liveBadge}>
                 <View style={s.liveDot} />
-                <Text style={s.liveText}>EN VIVO</Text>
+                <Text style={s.liveText}>{t('rooms.live')}</Text>
               </View>
             )}
             <View style={[s.levelBadge, { backgroundColor: (LEVEL_COLORS[item.level] ?? '#94A3B8') + '22', borderColor: (LEVEL_COLORS[item.level] ?? '#94A3B8') + '80' }]}>
-              <Text style={[s.levelText, { color: LEVEL_COLORS[item.level] ?? '#94A3B8' }]}>{item.level}</Text>
+              <Text style={[s.levelText, { color: LEVEL_COLORS[item.level] ?? '#94A3B8' }]}>{t(LEVEL_LABELS[item.level] ?? item.level)}</Text>
             </View>
             <View style={s.roomInfo}>
               <Text style={s.roomName}>{item.name}</Text>

@@ -9,9 +9,11 @@ import { storage } from '../../services/storage';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { inviteApi } from '../../services/api';
 import { useColors } from '../context/ThemeContext';
+import { useTranslation } from 'react-i18next';
 
 export default function JoinChallengeScreen() {
   const { C } = useColors();
+  const { t } = useTranslation();
   const router = useRouter();
   const params = useLocalSearchParams<{ code?: string }>();
 
@@ -28,7 +30,7 @@ export default function JoinChallengeScreen() {
       const { data } = await inviteApi.findByCode(code);
       setChallenge(data.challenge);
     } catch {
-      Alert.alert('No encontrado', 'No existe ninguna sala con ese código.');
+      Alert.alert(t('join.notFoundTitle'), t('join.notFoundMsg'));
     } finally {
       setLoading(false);
     }
@@ -44,13 +46,19 @@ export default function JoinChallengeScreen() {
 
     setJoining(true);
     try {
-      await inviteApi.join(code, token);
-      Alert.alert('¡Bienvenido!', `Te uniste a "${challenge.name}"`, [
-        { text: 'Ver sala', onPress: () => router.replace('/(tabs)' as any) },
+      const res = await inviteApi.join(code, token);
+      if (res.data?.pending) {
+        Alert.alert(t('join.requestSentTitle'), t('join.requestSentMsg'), [
+          { text: 'OK', onPress: () => router.back() },
+        ]);
+        return;
+      }
+      Alert.alert(t('join.welcomeTitle'), t('join.welcomeMsg', { name: challenge.name }), [
+        { text: t('join.seeRoom'), onPress: () => router.replace('/(tabs)' as any) },
       ]);
     } catch (e: any) {
-      const msg = e?.response?.data?.message ?? 'No se pudo unir. Intenta de nuevo.';
-      Alert.alert('Error', msg);
+      const msg = e?.response?.data?.message ?? t('join.joinError');
+      Alert.alert(t('common.error'), msg);
     } finally {
       setJoining(false);
     }
@@ -63,19 +71,19 @@ export default function JoinChallengeScreen() {
         <TouchableOpacity onPress={() => router.back()} style={s.backBtn}>
           <MaterialCommunityIcons name="arrow-left" size={24} color={C.textPrimary} />
         </TouchableOpacity>
-        <Text style={[s.headerTitle, { color: C.textPrimary }]}>Unirse a una sala</Text>
+        <Text style={[s.headerTitle, { color: C.textPrimary }]}>{t('join.title')}</Text>
         <View style={{ width: 40 }} />
       </View>
 
       <View style={s.body}>
-        <Text style={[s.label, { color: C.textMuted }]}>INGRESA EL CÓDIGO DE INVITACIÓN</Text>
+        <Text style={[s.label, { color: C.textMuted }]}>{t('join.codeLabel')}</Text>
 
         {/* Input */}
         <View style={[s.inputRow, { backgroundColor: C.card, borderColor: C.border }]}>
           <MaterialCommunityIcons name="pound" size={20} color={C.mugenPink} />
           <TextInput
             style={[s.input, { color: C.textPrimary }]}
-            placeholder="Ej: ABC123"
+            placeholder={t('join.codePlaceholder')}
             placeholderTextColor={C.textMuted}
             value={code}
             onChangeText={t => setCode(t.toUpperCase())}
@@ -102,12 +110,20 @@ export default function JoinChallengeScreen() {
               />
             )}
             <View style={s.cardBody}>
-              <Text style={[s.challengeName, { color: C.textPrimary }]}>{challenge.name}</Text>
+              <View style={s.nameRow}>
+                <Text style={[s.challengeName, { color: C.textPrimary }]}>{challenge.name}</Text>
+                {challenge.is_private && (
+                  <View style={[s.privacyBadge, { backgroundColor: C.mugenPink + '22' }]}>
+                    <MaterialCommunityIcons name="lock" size={12} color={C.mugenPink} />
+                    <Text style={[s.privacyBadgeText, { color: C.mugenPink }]}>{t('join.private')}</Text>
+                  </View>
+                )}
+              </View>
               <Text style={[s.challengeMeta, { color: C.textSecondary }]}>
-                Creado por {challenge.user?.name} · {challenge.duration_days} días
+                {t('join.createdBy', { name: challenge.user?.name, count: challenge.duration_days })}
               </Text>
               <Text style={[s.challengeMeta, { color: C.textMuted }]}>
-                {challenge.members_count} miembro{challenge.members_count !== 1 ? 's' : ''}
+                {t('join.memberCount', { count: challenge.members_count })}
               </Text>
             </View>
 
@@ -119,7 +135,9 @@ export default function JoinChallengeScreen() {
             >
               {joining
                 ? <ActivityIndicator color="#fff" />
-                : <Text style={s.joinBtnText}>UNIRME A LA SALA</Text>
+                : <Text style={s.joinBtnText}>
+                    {challenge.is_private ? t('join.requestJoin').toUpperCase() : t('join.joinRoom').toUpperCase()}
+                  </Text>
               }
             </TouchableOpacity>
           </View>
@@ -127,7 +145,7 @@ export default function JoinChallengeScreen() {
 
         {/* Divider */}
         <View style={[s.divider, { borderColor: C.border }]}>
-          <Text style={[s.dividerText, { color: C.textMuted }]}>o escanea el QR de tu amigo</Text>
+          <Text style={[s.dividerText, { color: C.textMuted }]}>{t('join.orScan')}</Text>
         </View>
 
         <TouchableOpacity
@@ -136,7 +154,7 @@ export default function JoinChallengeScreen() {
           activeOpacity={0.8}
         >
           <MaterialCommunityIcons name="qrcode-scan" size={24} color={C.mugenPink} />
-          <Text style={[s.qrBtnText, { color: C.textPrimary }]}>Escanear código QR</Text>
+          <Text style={[s.qrBtnText, { color: C.textPrimary }]}>{t('join.scanQr')}</Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>
@@ -159,7 +177,13 @@ const s = StyleSheet.create({
   card:        { borderRadius: 20, borderWidth: 1, overflow: 'hidden', marginBottom: 24 },
   coverImage:  { width: '100%', height: 140 },
   cardBody:    { padding: 16 },
-  challengeName: { fontSize: 18, fontWeight: '800', marginBottom: 4 },
+  nameRow:     { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 },
+  privacyBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999,
+  },
+  privacyBadgeText: { fontSize: 11, fontWeight: '800' },
+  challengeName: { fontSize: 18, fontWeight: '800', flexShrink: 1 },
   challengeMeta: { fontSize: 13, marginTop: 2 },
   joinBtn: {
     margin: 16, marginTop: 8, height: 52, borderRadius: 14,

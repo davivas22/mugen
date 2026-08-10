@@ -18,7 +18,7 @@ export default function MugenTopCalendar() {
             <TouchableOpacity key={day} style={s.dayWrapper} activeOpacity={0.7}>
               <Text style={[s.dayName, { color: isToday ? C.mugenPink : C.textMuted }]}>{day}</Text>
               <View style={[s.circle, { backgroundColor: isToday ? 'transparent' : C.elevated, borderColor: isToday ? C.mugenPink : 'transparent' }]}>
-                {isToday && <LinearGradient colors={[C.mugenPink, C.mugenPinkDark]} style={StyleSheet.absoluteFill} borderRadius={20} />}
+                {isToday && <LinearGradient colors={[C.mugenPink, C.mugenPinkDark]} style={[StyleSheet.absoluteFill, { borderRadius: 20 }]} />}
                 <Text style={[s.dayNum, { color: isToday ? '#FFF' : C.textSecondary }]}>{14 + i}</Text>
               </View>
             </TouchableOpacity>

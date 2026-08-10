@@ -9,9 +9,11 @@ import {
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useColors } from '../context/ThemeContext';
+import { useTranslation } from 'react-i18next';
 
 const OnboardingScreen = () => {
   const { C } = useColors();
+  const { t } = useTranslation();
   const navigation = useNavigation<any>();
 
   return (
@@ -28,10 +30,10 @@ const OnboardingScreen = () => {
 
         <View style={styles.textContainer}>
           <Text style={[styles.title, { color: C.textPrimary }]}>
-            MUGEN: <Text style={{ color: C.mugenPink }}>Rompe tus límites</Text>
+            MUGEN: <Text style={{ color: C.mugenPink }}>{t('onboarding.title2')}</Text>
           </Text>
           <Text style={[styles.subtitle, { color: C.textSecondary }]}>
-            La experiencia de fitness gamificada más potente.
+            {t('onboarding.subtitle')}
           </Text>
         </View>
 
@@ -41,7 +43,7 @@ const OnboardingScreen = () => {
             onPress={() => navigation.navigate('register' as any)}
             activeOpacity={0.8}
           >
-            <Text style={styles.primaryButtonText}>EMPEZAR</Text>
+            <Text style={styles.primaryButtonText}>{t('onboarding.start')}</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -49,7 +51,7 @@ const OnboardingScreen = () => {
             onPress={() => navigation.navigate('login' as any)}
           >
             <Text style={[styles.secondaryButtonText, { color: C.textPrimary }]}>
-              Ya tengo cuenta
+              {t('onboarding.alreadyHaveAccount')}
             </Text>
           </TouchableOpacity>
         </View>

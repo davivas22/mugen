@@ -4,6 +4,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useColors } from '../context/ThemeContext';
+import { useTranslation } from 'react-i18next';
 
 type Status = 'IDLE' | 'RUNNING' | 'PAUSED' | 'FINISHED';
 type State = { status: Status; seconds: number };
@@ -23,9 +24,9 @@ function reducer(state: State, action: Action): State {
 }
 
 const METRICS = [
-  { label: 'BPM', value: '142', icon: 'heart-pulse', color: '#FF6B35' },
-  { label: 'Calorías', value: '320', icon: 'fire', color: '#FF2E63' },
-  { label: 'Distancia', value: '2.4km', icon: 'map-marker-distance', color: '#00F5FF' },
+  { label: 'liveSession.bpm', value: '142', icon: 'heart-pulse', color: '#FF6B35' },
+  { label: 'liveSession.calories', value: '320', icon: 'fire', color: '#FF2E63' },
+  { label: 'liveSession.distance', value: '2.4km', icon: 'map-marker-distance', color: '#00F5FF' },
 ];
 
 const pad = (n: number) => String(n).padStart(2, '0');
@@ -33,6 +34,7 @@ const pad = (n: number) => String(n).padStart(2, '0');
 const LiveSessionScreen = () => {
   const navigation = useNavigation<any>();
   const { C } = useColors();
+  const { t } = useTranslation();
   const [state, dispatch] = useReducer(reducer, { status: 'IDLE', seconds: 0 });
 
   useEffect(() => {
@@ -75,7 +77,7 @@ const LiveSessionScreen = () => {
           </TouchableOpacity>
           <View style={styles.sessionBadge}>
             {isRunning && <View style={styles.livePulse} />}
-            <Text style={styles.sessionBadgeText}>{isRunning ? 'EN SESIÓN' : hasStarted ? 'PAUSADO' : 'LISTO'}</Text>
+            <Text style={styles.sessionBadgeText}>{isRunning ? t('liveSession.statusLive') : hasStarted ? t('liveSession.statusPaused') : t('liveSession.statusReady')}</Text>
           </View>
           <View style={{ width: 40 }} />
         </View>
@@ -86,14 +88,14 @@ const LiveSessionScreen = () => {
             <View key={m.label} style={styles.metricCard}>
               <MaterialCommunityIcons name={m.icon as any} size={20} color={m.color} />
               <Text style={[styles.metricVal, { color: m.color }]}>{m.value}</Text>
-              <Text style={styles.metricLabel}>{m.label}</Text>
+              <Text style={styles.metricLabel}>{t(m.label)}</Text>
             </View>
           ))}
         </View>
 
         {/* TIMER */}
         <View style={styles.timerSection}>
-          <Text style={styles.timerLabel}>TIEMPO TRANSCURRIDO</Text>
+          <Text style={styles.timerLabel}>{t('liveSession.elapsed')}</Text>
           <Text style={styles.timerText}>
             {pad(hrs)}:{pad(mins)}:{pad(secs)}
           </Text>
@@ -105,7 +107,7 @@ const LiveSessionScreen = () => {
               style={[styles.progressFill, { width: `${Math.min((state.seconds / 3600) * 100, 100)}%` }]}
             />
           </View>
-          <Text style={styles.progressLabel}>Meta: 60 min</Text>
+          <Text style={styles.progressLabel}>{t('liveSession.goal', { count: 60 })}</Text>
         </View>
 
         {/* CONTROLS */}
@@ -125,8 +127,7 @@ const LiveSessionScreen = () => {
           >
             <LinearGradient
               colors={[C.mugenPink, C.mugenPinkDark]}
-              style={StyleSheet.absoluteFill}
-              borderRadius={40}
+              style={[StyleSheet.absoluteFill, { borderRadius: 40 }]}
             />
             <MaterialCommunityIcons
               name={isRunning ? 'pause' : 'play'}

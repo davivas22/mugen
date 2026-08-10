@@ -40,7 +40,7 @@ const LIGHT_PALETTE = {
   statusBar: 'dark-content' as const,
 };
 
-export type AppColors = typeof DARK_PALETTE;
+export type AppColors = typeof DARK_PALETTE | typeof LIGHT_PALETTE;
 
 interface ThemeCtx {
   isDark: boolean;

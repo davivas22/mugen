@@ -9,11 +9,12 @@ import { useFocusEffect } from '@react-navigation/native';
 import { useColors } from '../context/ThemeContext';
 import { userApi, challengeApi, getStorageUrl } from '../../services/api';
 import { storage } from '../../services/storage';
+import { useTranslation } from 'react-i18next';
 
 const PERIODS = [
-  { key: 'semana', label: 'Semana' },
-  { key: 'mes',    label: 'Mes'   },
-  { key: 'año',    label: 'Año'   },
+  { key: 'semana', label: 'ranking.week' },
+  { key: 'mes',    label: 'ranking.month' },
+  { key: 'año',    label: 'ranking.year'  },
 ] as const;
 type Period = 'semana' | 'mes' | 'año';
 
@@ -52,6 +53,7 @@ function AvatarBubble({ url, name, size }: { url: string | null; name: string; s
 
 export default function RankingScreen() {
   const { C } = useColors();
+  const { t } = useTranslation();
   const [period,    setPeriod]    = useState<Period>('semana');
   const [rooms,     setRooms]     = useState<Room[]>([]);
   const [roomId,    setRoomId]    = useState<number | null>(null);
@@ -123,8 +125,8 @@ export default function RankingScreen() {
             {/* ── HEADER ─────────────────────────────────────────────── */}
             <LinearGradient colors={[C.mugenPink + '28', 'transparent']} style={s.headerGrad}>
               <View style={{ paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight ?? 0) + 12 : 56, paddingHorizontal: 24, paddingBottom: 16 }}>
-                <Text style={[s.headerTitle, { color: C.textPrimary }]}>Ranking</Text>
-                <Text style={[s.headerSub, { color: C.textSecondary }]}>Compite · Supera · Domina</Text>
+                <Text style={[s.headerTitle, { color: C.textPrimary }]}>{t('ranking.title')}</Text>
+                <Text style={[s.headerSub, { color: C.textSecondary }]}>{t('ranking.subtitle')}</Text>
               </View>
             </LinearGradient>
 
@@ -150,7 +152,7 @@ export default function RankingScreen() {
             <View style={[s.tabBar, { backgroundColor: C.card, borderColor: C.border }]}>
               {PERIODS.map(({ key, label }) => (
                 <TouchableOpacity key={key} onPress={() => selectPeriod(key)} style={[s.tab, period === key && s.tabActive]} activeOpacity={0.7}>
-                  <Text style={[s.tabText, { color: period === key ? '#FFF' : C.textSecondary }]}>{label}</Text>
+                  <Text style={[s.tabText, { color: period === key ? '#FFF' : C.textSecondary }]}>{t(label)}</Text>
                 </TouchableOpacity>
               ))}
             </View>
@@ -161,7 +163,7 @@ export default function RankingScreen() {
             ) : entries.length === 0 ? (
               <View style={{ alignItems: 'center', paddingVertical: 48, gap: 10 }}>
                 <Ionicons name="trophy-outline" size={42} color={C.textMuted} />
-                <Text style={{ color: C.textMuted, fontSize: 14 }}>Sin datos para este período</Text>
+                <Text style={{ color: C.textMuted, fontSize: 14 }}>{t('ranking.noData')}</Text>
               </View>
             ) : (
               <>
@@ -183,7 +185,7 @@ export default function RankingScreen() {
                           <Text style={s.rankBadgeText}>{realRank + 1}</Text>
                         </View>
                         <Text style={[s.podiumName, { color: isMe ? C.mugenPink : C.textPrimary }]} numberOfLines={1}>
-                          {isMe ? 'Tú' : u.username.split(' ')[0]}
+                          {isMe ? t('common.you') : u.username.split(' ')[0]}
                         </Text>
                         <Text style={[s.podiumPts, { color }]}>{u.points.toLocaleString()} pts</Text>
                       </View>
@@ -192,7 +194,7 @@ export default function RankingScreen() {
                 </View>
 
                 {rest.length > 0 && (
-                  <Text style={[s.listLabel, { color: C.textPrimary }]}>Clasificación</Text>
+                  <Text style={[s.listLabel, { color: C.textPrimary }]}>{t('ranking.classification')}</Text>
                 )}
               </>
             )}
@@ -206,11 +208,11 @@ export default function RankingScreen() {
               <Text style={[s.rowRank, { color: isMe ? C.mugenPink : C.textSecondary }]}>#{item.rank}</Text>
               <AvatarBubble url={avatarUrl} name={item.username} size={38} />
               <Text style={[s.rowName, { color: isMe ? C.mugenPink : C.textPrimary }]} numberOfLines={1}>
-                {isMe ? 'Tú' : item.username.split(' ')[0]}
+                {isMe ? t('common.you') : item.username.split(' ')[0]}
               </Text>
               <View style={{ alignItems: 'flex-end' }}>
                 <Text style={[s.rowPts, { color: isMe ? C.mugenPink : C.textSecondary }]}>{item.points} pts</Text>
-                <Text style={{ color: C.textMuted, fontSize: 10 }}>{item.sessions} sesiones</Text>
+                <Text style={{ color: C.textMuted, fontSize: 10 }}>{t('ranking.sessions', { count: item.sessions })}</Text>
               </View>
             </View>
           );
@@ -228,7 +230,7 @@ export default function RankingScreen() {
               size={34}
             />
             <View>
-              <Text style={s.myBarLabel}>Tu posición</Text>
+              <Text style={s.myBarLabel}>{t('ranking.yourPosition')}</Text>
               <Text style={s.myBarRank}>#{myRank}</Text>
             </View>
           </View>

@@ -10,6 +10,7 @@ import { useRouter } from 'expo-router';
 import { useColors } from '../context/ThemeContext';
 import { storage } from '../../services/storage';
 import { userApi } from '../../services/api';
+import { useTranslation } from 'react-i18next';
 
 interface RowProps {
   icon: string; label: string; subtitle?: string; value?: string;
@@ -21,6 +22,7 @@ export default function SecurityScreen() {
   const navigation = useNavigation<any>();
   const router = useRouter();
   const { C } = useColors();
+  const { t } = useTranslation();
   const [isPrivate, setIsPrivate] = useState(false);
   const [twoFactor, setTwoFactor] = useState(true);
   const [loggingOut, setLoggingOut] = useState(false);
@@ -43,23 +45,23 @@ export default function SecurityScreen() {
 
   const handleChangePassword = async () => {
     if (!currentPwd || !newPwd || !confirmPwd) {
-      Alert.alert('Error', 'Completa todos los campos.'); return;
+      Alert.alert(t('common.error'), t('security.fillAll')); return;
     }
     if (newPwd !== confirmPwd) {
-      Alert.alert('Error', 'Las contraseñas nuevas no coinciden.'); return;
+      Alert.alert(t('common.error'), t('security.passwordsDontMatch')); return;
     }
     if (newPwd.length < 8) {
-      Alert.alert('Error', 'La contraseña debe tener al menos 8 caracteres.'); return;
+      Alert.alert(t('common.error'), t('security.passwordTooShort')); return;
     }
     setChangingPwd(true);
     try {
       const token = await storage.get('token') ?? '';
       await userApi.changePassword(currentPwd, newPwd, token);
-      Alert.alert('¡Listo!', 'Contraseña actualizada correctamente.');
+      Alert.alert(t('editProfile.saved'), t('security.passwordUpdated'));
       setShowPwdModal(false);
       setCurrentPwd(''); setNewPwd(''); setConfirmPwd('');
     } catch (e: any) {
-      Alert.alert('Error', e?.response?.data?.message ?? 'No se pudo cambiar la contraseña.');
+      Alert.alert(t('common.error'), e?.response?.data?.message ?? t('security.changeFailed'));
     } finally {
       setChangingPwd(false);
     }
@@ -67,12 +69,12 @@ export default function SecurityScreen() {
 
   const confirmLogout = (): Promise<boolean> => {
     if (Platform.OS === 'web') {
-      return Promise.resolve(window.confirm('¿Estás seguro que deseas cerrar sesión?'));
+      return Promise.resolve(window.confirm(t('security.logoutWebConfirm')));
     }
     return new Promise((resolve) => {
-      Alert.alert('Cerrar sesión', '¿Estás seguro?', [
-        { text: 'Cancelar', onPress: () => resolve(false), style: 'cancel' },
-        { text: 'Salir', onPress: () => resolve(true), style: 'destructive' },
+      Alert.alert(t('security.logoutConfirmTitle'), t('security.logoutConfirmMsg'), [
+        { text: t('common.cancel'), onPress: () => resolve(false), style: 'cancel' },
+        { text: t('security.logoutBtn'), onPress: () => resolve(true), style: 'destructive' },
       ]);
     });
   };
@@ -126,7 +128,7 @@ export default function SecurityScreen() {
         <TouchableOpacity onPress={() => navigation.goBack()} style={[s.backBtn, { backgroundColor: C.card, borderColor: C.border }]}>
           <MaterialCommunityIcons name="arrow-left" size={22} color={C.textPrimary} />
         </TouchableOpacity>
-        <Text style={[s.headerTitle, { color: C.textPrimary }]}>Cuenta y Seguridad</Text>
+        <Text style={[s.headerTitle, { color: C.textPrimary }]}>{t('security.title')}</Text>
         <View style={{ width: 40 }} />
       </View>
 
@@ -135,12 +137,12 @@ export default function SecurityScreen() {
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
           <TouchableOpacity style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)' }} activeOpacity={1} onPress={() => setShowPwdModal(false)} />
           <View style={[s.pwdSheet, { backgroundColor: C.card, borderColor: C.border }]}>
-            <Text style={[s.pwdTitle, { color: C.textPrimary }]}>Cambiar contraseña</Text>
+            <Text style={[s.pwdTitle, { color: C.textPrimary }]}>{t('security.changePasswordTitle')}</Text>
 
             {[
-              { label: 'Contraseña actual', val: currentPwd, set: setCurrentPwd, show: showCurrent, toggle: () => setShowCurrent(v => !v) },
-              { label: 'Nueva contraseña',  val: newPwd,     set: setNewPwd,     show: showNew,     toggle: () => setShowNew(v => !v) },
-              { label: 'Confirmar nueva',   val: confirmPwd, set: setConfirmPwd, show: showNew,     toggle: () => setShowNew(v => !v) },
+              { label: t('security.currentPassword'), val: currentPwd, set: setCurrentPwd, show: showCurrent, toggle: () => setShowCurrent(v => !v) },
+              { label: t('security.newPassword'),  val: newPwd,     set: setNewPwd,     show: showNew,     toggle: () => setShowNew(v => !v) },
+              { label: t('security.confirmNewPassword'),   val: confirmPwd, set: setConfirmPwd, show: showNew,     toggle: () => setShowNew(v => !v) },
             ].map(({ label, val, set, show, toggle }) => (
               <View key={label} style={[s.pwdField, { borderColor: C.border, backgroundColor: C.bg }]}>
                 <TextInput
@@ -165,7 +167,7 @@ export default function SecurityScreen() {
             >
               {changingPwd
                 ? <ActivityIndicator color="#fff" />
-                : <Text style={s.pwdBtnTxt}>Actualizar contraseña</Text>
+                : <Text style={s.pwdBtnTxt}>{t('security.updatePassword')}</Text>
               }
             </TouchableOpacity>
           </View>
@@ -174,40 +176,40 @@ export default function SecurityScreen() {
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll}>
 
-        <Text style={[s.groupLabel, { color: C.textMuted }]}>CREDENCIALES</Text>
+        <Text style={[s.groupLabel, { color: C.textMuted }]}>{t('security.credentials')}</Text>
         <View style={[s.group, { backgroundColor: C.card, borderColor: C.border }]}>
-          <Row icon="email-outline" label="Correo electrónico" value={userEmail} iconColor={C.cyan} />
+          <Row icon="email-outline" label={t('security.email')} value={userEmail} iconColor={C.cyan} />
           <View style={[s.divider, { backgroundColor: C.border }]} />
-          <Row icon="lock-reset" label="Cambiar contraseña" iconColor={C.purple} onPress={() => setShowPwdModal(true)} />
+          <Row icon="lock-reset" label={t('security.changePassword')} iconColor={C.purple} onPress={() => setShowPwdModal(true)} />
         </View>
 
-        <Text style={[s.groupLabel, { color: C.textMuted }]}>PRIVACIDAD</Text>
+        <Text style={[s.groupLabel, { color: C.textMuted }]}>{t('security.privacy')}</Text>
         <View style={[s.group, { backgroundColor: C.card, borderColor: C.border }]}>
-          <Row icon="eye-off-outline" label="Cuenta Privada" subtitle="Solo seguidores aprobados verán tu perfil" iconColor={C.gold} isSwitch switchVal={isPrivate} onSwitch={setIsPrivate} />
+          <Row icon="eye-off-outline" label={t('security.privateAccount')} subtitle={t('security.privateSubtitle')} iconColor={C.gold} isSwitch switchVal={isPrivate} onSwitch={setIsPrivate} />
         </View>
 
-        <Text style={[s.groupLabel, { color: C.textMuted }]}>SEGURIDAD ADICIONAL</Text>
+        <Text style={[s.groupLabel, { color: C.textMuted }]}>{t('security.additionalSecurity')}</Text>
         <View style={[s.group, { backgroundColor: C.card, borderColor: C.border }]}>
-          <Row icon="shield-check-outline" label="Autenticación 2FA" iconColor={C.success} isSwitch switchVal={twoFactor} onSwitch={setTwoFactor} />
+          <Row icon="shield-check-outline" label={t('security.twoFA')} iconColor={C.success} isSwitch switchVal={twoFactor} onSwitch={setTwoFactor} />
           <View style={[s.divider, { backgroundColor: C.border }]} />
-          <Row icon="cellphone-link" label="Dispositivos vinculados" onPress={() => {}} />
+          <Row icon="cellphone-link" label={t('security.linkedDevices')} onPress={() => {}} />
         </View>
 
-        <Text style={[s.groupLabel, { color: '#EF4444AA' }]}>ZONA DE PELIGRO</Text>
+        <Text style={[s.groupLabel, { color: '#EF4444AA' }]}>{t('security.dangerZone')}</Text>
         <View style={[s.group, { backgroundColor: C.card, borderColor: C.border }]}>
           <TouchableOpacity style={s.row} activeOpacity={0.7} onPress={handleLogout} disabled={loggingOut}>
             <View style={[s.rowIcon, { backgroundColor: '#EF444420' }]}>
               <MaterialCommunityIcons name="logout" size={18} color="#EF4444" />
             </View>
-            <Text style={[s.rowLabel, { color: '#EF4444', flex: 1 }]}>Cerrar sesión</Text>
+            <Text style={[s.rowLabel, { color: '#EF4444', flex: 1 }]}>{t('security.logout')}</Text>
             <MaterialCommunityIcons name="chevron-right" size={18} color="#EF444460" />
           </TouchableOpacity>
           <View style={[s.divider, { backgroundColor: C.border }]} />
-          <TouchableOpacity style={s.row} activeOpacity={0.7} onPress={() => Alert.alert('Eliminar cuenta', 'Esta acción es irreversible.', [{ text: 'Cancelar', style: 'cancel' }, { text: 'Eliminar', style: 'destructive' }])}>
+          <TouchableOpacity style={s.row} activeOpacity={0.7} onPress={() => Alert.alert(t('security.deleteTitle'), t('security.deleteMsg'), [{ text: t('common.cancel'), style: 'cancel' }, { text: t('common.delete'), style: 'destructive' }])}>
             <View style={[s.rowIcon, { backgroundColor: '#EF444420' }]}>
               <MaterialCommunityIcons name="account-remove" size={18} color="#EF4444" />
             </View>
-            <Text style={[s.rowLabel, { color: '#EF444475', flex: 1 }]}>Eliminar cuenta</Text>
+            <Text style={[s.rowLabel, { color: '#EF444475', flex: 1 }]}>{t('security.deleteAccount')}</Text>
           </TouchableOpacity>
         </View>
 
