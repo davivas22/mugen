@@ -6,6 +6,9 @@ import 'react-native-reanimated';
 import * as Notifications from 'expo-notifications';
 import { ThemeProvider as MugenThemeProvider, useColors } from './context/ThemeContext';
 import { createNotificationChannels, setupForegroundHandler } from '../services/notifications';
+import { initI18n } from '../services/i18n';
+
+initI18n();
 
 export const unstable_settings = { anchor: '(tabs)' };
 
