@@ -1,14 +1,12 @@
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { Stack, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import 'react-native-reanimated';
 import * as Notifications from 'expo-notifications';
 import { ThemeProvider as MugenThemeProvider, useColors } from './context/ThemeContext';
 import { createNotificationChannels, setupForegroundHandler } from '../services/notifications';
 import { initI18n } from '../services/i18n';
-
-initI18n();
 
 export const unstable_settings = { anchor: '(tabs)' };
 
@@ -64,6 +62,16 @@ function InnerLayout() {
 }
 
 export default function RootLayout() {
+  const [i18nReady, setI18nReady] = useState(false);
+
+  useEffect(() => {
+    initI18n()
+      .then(() => setI18nReady(true))
+      .catch(() => setI18nReady(true));
+  }, []);
+
+  if (!i18nReady) return null;
+
   return (
     <MugenThemeProvider>
       <InnerLayout />
