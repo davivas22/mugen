@@ -1,51 +1,41 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import {
-  ActivityIndicator, Image, StyleSheet, View, Text, ScrollView,
-  TouchableOpacity, StatusBar, Platform,
+  ActivityIndicator, Animated, Image, Pressable,
+  ScrollView, StatusBar, StyleSheet, Text, View,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useColors } from '../context/ThemeContext';
 import { getStorageUrl, userApi, badgeApi } from '../../services/api';
 import { storage } from '../../services/storage';
 
-const ACCENT = '#FF0066';
-const HORIZONTAL_MARGIN = 16;
+// ─── Tokens ───────────────────────────────────────────────────────────────────
+const BG      = '#080808';
+const CARD    = '#111111';
+const CARD2   = '#171717';
+const BORDER  = '#222222';
+const ACCENT  = '#FF0066';
+const TEXT    = '#ffffff';
+const MUTED   = '#555555';
+const SUB     = '#888888';
 
-type Stats = { streak: number; points: number };
-type Badge = { key: string; name: string; icon: string; description: string; earned: boolean; unlocked_at: string | null };
-
-function getRank(points: number) {
-  if (points >= 1500) return 'Guerrero Elite';
-  if (points >= 500)  return 'Campeón';
-  if (points >= 150)  return 'Guerrero';
-  if (points >= 50)   return 'Iniciado';
-  return 'Novato';
-}
-
-function getLevel(points: number) {
-  return Math.max(1, Math.floor(points / 50) + 1);
-}
-
-const cardShadow = Platform.select({
-  ios: { shadowColor: '#000000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.08, shadowRadius: 3 },
-  android: { elevation: 2 },
-  default: {},
-});
+type Badge = {
+  key: string; name: string; icon: string;
+  description: string; earned: boolean; unlocked_at: string | null;
+};
 
 export default function ProfileScreen() {
-  const insets = useSafeAreaInsets();
+  const insets     = useSafeAreaInsets();
   const navigation = useNavigation<any>();
-  const { C } = useColors();
 
-  const [userName, setUserName]   = useState('Usuario');
+  const [userName,  setUserName]  = useState('Usuario');
   const [avatarUri, setAvatarUri] = useState<string | null>(null);
-  const [stats, setStats]         = useState<Stats>({ streak: 0, points: 0 });
-  const [badges, setBadges]       = useState<Badge[]>([]);
-  const [loading, setLoading]     = useState(true);
+  const [streak,    setStreak]    = useState(0);
+  const [badges,    setBadges]    = useState<Badge[]>([]);
+  const [loading,   setLoading]   = useState(true);
+
+  const fade = useRef(new Animated.Value(0)).current;
 
   const loadProfile = useCallback(async () => {
     const [t, userRaw, localAvatar] = await Promise.all([
@@ -53,177 +43,229 @@ export default function ProfileScreen() {
       storage.get('user'),
       storage.get('avatar_local'),
     ]);
-
     if (userRaw) {
       try {
         const u = JSON.parse(userRaw);
         setUserName(u.name ?? 'Usuario');
-        if (localAvatar) {
-          setAvatarUri(localAvatar);
-        } else {
-          setAvatarUri(getStorageUrl(u.avatar));
-        }
+        setAvatarUri(localAvatar ?? getStorageUrl(u.avatar));
       } catch (_) {}
     }
-
     if (t) {
       try {
         const [statsRes, badgesRes] = await Promise.all([
           userApi.stats(t),
           badgeApi.get(t),
         ]);
-        setStats({
-          streak: statsRes.data.streak ?? 0,
-          points: statsRes.data.points ?? 0,
-        });
+        setStreak(statsRes.data.streak ?? 0);
         setBadges(badgesRes.data.badges ?? []);
       } catch (_) {}
     }
     setLoading(false);
+    Animated.timing(fade, { toValue: 1, duration: 340, useNativeDriver: true }).start();
   }, []);
 
   useFocusEffect(useCallback(() => {
     setLoading(true);
+    fade.setValue(0);
     loadProfile();
   }, [loadProfile]));
 
-  const level     = getLevel(stats.points);
-  const xpPercent = Math.min(100, (stats.points % 50) * 2);
-  const rank      = getRank(stats.points);
   const earned    = badges.filter(b => b.earned).length;
+  const firstName = userName.split(' ')[0];
 
   return (
-    <View style={[s.root, { backgroundColor: C.bg }]}>
-      <StatusBar barStyle={C.statusBar} backgroundColor="transparent" translucent />
+    <View style={[s.root, { paddingTop: insets.top }]}>
+      <StatusBar barStyle="light-content" backgroundColor={BG} />
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll}>
+      {/* ── Top bar ── */}
+      <View style={s.topBar}>
+        <Text style={s.topBarTitle}>Perfil</Text>
+        <Pressable
+          onPress={() => navigation.navigate('screens/SettingsScreen')}
+          style={s.iconBtn}
+        >
+          <Ionicons name="settings-outline" size={19} color={SUB} />
+        </Pressable>
+      </View>
 
-        {/* HERO */}
-        <View style={[s.hero, { backgroundColor: C.card, paddingTop: insets.top + 8 }]}>
-          <View style={s.topBar}>
-            <Text style={[s.screenTitle, { color: C.textPrimary }]}>Mi Perfil</Text>
-            <TouchableOpacity onPress={() => navigation.navigate('screens/SettingsScreen')} style={[s.iconBtn, { backgroundColor: C.card, borderColor: C.border }]}>
-              <Ionicons name="settings-outline" size={22} color={C.textPrimary} />
-            </TouchableOpacity>
-          </View>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }}>
+        <Animated.View style={{ opacity: fade }}>
 
-          <View style={s.avatarSection}>
-            <TouchableOpacity onPress={() => navigation.navigate('screens/EditProfileScreen')} activeOpacity={0.85}>
-              <View style={[s.avatarRing, { borderColor: C.mugenPink + '55' }]}>
-                {avatarUri ? (
-                  <Image source={{ uri: avatarUri }} style={s.avatarImg} />
-                ) : (
-                  <View style={[s.avatarImg, { backgroundColor: C.elevated }]}>
-                    <Ionicons name="person" size={40} color={C.mugenPink} />
-                  </View>
-                )}
+          {/* ── Avatar block ── */}
+          <View style={s.avatarBlock}>
+            <Pressable
+              onPress={() => navigation.navigate('screens/EditProfileScreen')}
+              style={s.avatarWrap}
+            >
+              {avatarUri ? (
+                <Image source={{ uri: avatarUri }} style={s.avatar} />
+              ) : (
+                <View style={[s.avatar, s.avatarFallback]}>
+                  <Ionicons name="person" size={40} color={MUTED} />
+                </View>
+              )}
+              <View style={s.editDot}>
+                <Ionicons name="pencil" size={10} color="#fff" />
               </View>
-              <View style={[s.editBtn, { backgroundColor: C.mugenPink }]}>
-                <Ionicons name="pencil" size={12} color="#FFF" />
-              </View>
-            </TouchableOpacity>
+            </Pressable>
+
+            <Text style={s.name}>{firstName}</Text>
+            {userName !== firstName && (
+              <Text style={s.fullName}>{userName}</Text>
+            )}
+
+            <Pressable
+              onPress={() => navigation.navigate('screens/EditProfileScreen')}
+              style={s.editBtn}
+            >
+              <Text style={s.editBtnTxt}>Editar perfil</Text>
+            </Pressable>
           </View>
 
-          <Text style={[s.userName, { color: C.textPrimary }]}>{userName}</Text>
-          <View style={[s.rankBadge, { backgroundColor: C.mugenPink + '20' }]}>
-            <Ionicons name="shield-checkmark" size={14} color={C.mugenPink} />
-            <Text style={[s.rankBadgeText, { color: C.mugenPink }]}>{rank} · Nv.{level}</Text>
-          </View>
-
-          <View style={s.xpSection}>
-            <View style={s.xpLabelRow}>
-              <Text style={[s.xpLabel, { color: C.textSecondary }]}>XP hacia nivel {level + 1}</Text>
-              <Text style={[s.xpPct, { color: C.mugenPink }]}>{xpPercent}%</Text>
-            </View>
-            <View style={[s.xpBar, { backgroundColor: C.elevated }]}>
-              <LinearGradient
-                colors={[C.mugenPink, '#FF6B35']}
-                start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
-                style={[s.xpFill, { width: `${xpPercent}%` }]}
+          {/* ── Stats row ── */}
+          {loading ? (
+            <ActivityIndicator color={ACCENT} style={{ marginVertical: 32 }} />
+          ) : (
+            <View style={s.statsRow}>
+              <StatCard
+                icon="flame-outline"
+                iconColor={ACCENT}
+                value={String(streak)}
+                label="RACHA"
+                sub="días"
+              />
+              <View style={s.statDivider} />
+              <StatCard
+                icon="trophy-outline"
+                iconColor="#F59E0B"
+                value={`${earned}/${badges.length}`}
+                label="LOGROS"
+                sub="desbloqueados"
               />
             </View>
-          </View>
-        </View>
+          )}
 
-        {/* STATS */}
-        {loading ? (
-          <ActivityIndicator color={C.mugenPink} style={{ marginTop: 24 }} />
-        ) : (
-          <View style={s.statsRow}>
-            <View style={[s.statCard, cardShadow, { backgroundColor: C.card }]}>
-              <Ionicons name="flame-outline" size={22} color={ACCENT} />
-              <Text style={[s.statVal, { color: C.textPrimary }]}>{stats.streak}</Text>
-              <Text style={[s.statLabel, { color: C.textSecondary }]}>RACHA</Text>
-            </View>
-            <View style={[s.statCard, cardShadow, { backgroundColor: C.card }]}>
-              <Ionicons name="trophy-outline" size={22} color={ACCENT} />
-              <Text style={[s.statVal, { color: C.textPrimary }]}>{stats.points}</Text>
-              <Text style={[s.statLabel, { color: C.textSecondary }]}>PUNTOS</Text>
-            </View>
-            <View style={[s.statCard, cardShadow, { backgroundColor: C.card }]}>
-              <Ionicons name="star-outline" size={22} color={ACCENT} />
-              <Text style={[s.statVal, { color: C.textPrimary }]}>{level}</Text>
-              <Text style={[s.statLabel, { color: C.textSecondary }]}>NIVEL</Text>
-            </View>
-          </View>
-        )}
-
-        {/* LOGROS */}
-        <View style={s.section}>
-          <View style={s.sectionHeader}>
-            <Text style={[s.sectionLabel, { color: C.textSecondary }]}>LOGROS</Text>
-            <Text style={[s.seeAll, { color: C.mugenPink }]}>
-              {badges.filter(b => b.earned).length}/{badges.length}
-            </Text>
-          </View>
-          <View style={s.grid}>
-            {badges.map((b: Badge) => (
-              <View key={b.key} style={[s.badge, { backgroundColor: C.card, borderColor: b.earned ? C.mugenPink + '35' : C.border, opacity: b.earned ? 1 : 0.35 }, cardShadow]}>
-                <Ionicons name={b.icon as any} size={26} color={b.earned ? C.mugenPink : C.textSecondary} />
-                <Text style={[s.badgeLabel, { color: C.textSecondary }]}>{b.name}</Text>
-                {b.earned && b.unlocked_at ? (
-                  <Text style={{ fontSize: 8, color: C.mugenPink, fontWeight: '700' }}>{b.unlocked_at}</Text>
-                ) : null}
+          {/* ── Logros ── */}
+          {!loading && (
+            <View style={s.section}>
+              <View style={s.sectionHeader}>
+                <Text style={s.sectionTitle}>Logros</Text>
+                <Text style={s.sectionCount}>{earned} de {badges.length}</Text>
               </View>
-            ))}
-          </View>
-        </View>
 
-        <View style={{ height: 110 }} />
+              {badges.length === 0 ? (
+                <View style={s.emptyState}>
+                  <MaterialCommunityIcons name="trophy-outline" size={36} color={MUTED} />
+                  <Text style={s.emptyTitle}>Sin logros aún</Text>
+                  <Text style={s.emptySub}>Asiste al gym para desbloquear tus primeros logros</Text>
+                </View>
+              ) : (
+                <View style={s.badgeGrid}>
+                  {badges.map(b => <BadgeItem key={b.key} badge={b} />)}
+                </View>
+              )}
+            </View>
+          )}
+
+        </Animated.View>
       </ScrollView>
     </View>
   );
 }
 
+// ─── Stat card ────────────────────────────────────────────────────────────────
+function StatCard({ icon, iconColor, value, label, sub }: {
+  icon: React.ComponentProps<typeof Ionicons>['name'];
+  iconColor: string; value: string; label: string; sub: string;
+}) {
+  return (
+    <View style={s.statCard}>
+      <View style={[s.statIconWrap, { backgroundColor: iconColor + '14' }]}>
+        <Ionicons name={icon} size={18} color={iconColor} />
+      </View>
+      <Text style={s.statValue}>{value}</Text>
+      <Text style={s.statLabel}>{label}</Text>
+      <Text style={s.statSub}>{sub}</Text>
+    </View>
+  );
+}
+
+// ─── Badge item ───────────────────────────────────────────────────────────────
+function BadgeItem({ badge: b }: { badge: Badge }) {
+  return (
+    <View style={[s.badgeCard, !b.earned && s.badgeLocked]}>
+      <View style={[s.badgeIconWrap, { backgroundColor: b.earned ? ACCENT + '14' : CARD2 }]}>
+        <Ionicons
+          name={b.icon as any}
+          size={22}
+          color={b.earned ? ACCENT : MUTED}
+        />
+      </View>
+      <Text style={[s.badgeName, !b.earned && { color: MUTED }]} numberOfLines={2}>
+        {b.name}
+      </Text>
+      {b.earned && b.unlocked_at && (
+        <Text style={s.badgeDate}>{b.unlocked_at}</Text>
+      )}
+      {b.earned && (
+        <View style={s.badgeDot} />
+      )}
+    </View>
+  );
+}
+
+// ─── Styles ───────────────────────────────────────────────────────────────────
 const s = StyleSheet.create({
-  root:          { flex: 1 },
-  scroll:        { paddingBottom: 24 },
-  hero:          { paddingBottom: 24, alignItems: 'center', borderBottomLeftRadius: 24, borderBottomRightRadius: 24 },
-  topBar:        { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', width: '100%', paddingHorizontal: HORIZONTAL_MARGIN, marginBottom: 20 },
-  screenTitle:   { fontSize: 22, fontWeight: '900' },
-  iconBtn:       { width: 40, height: 40, borderRadius: 12, justifyContent: 'center', alignItems: 'center', borderWidth: 1 },
-  avatarSection: { position: 'relative', marginBottom: 14 },
-  avatarRing:    { width: 100, height: 100, borderRadius: 50, justifyContent: 'center', alignItems: 'center', borderWidth: 2 },
-  avatarImg:     { width: 90, height: 90, borderRadius: 45, justifyContent: 'center', alignItems: 'center' },
-  editBtn:       { position: 'absolute', bottom: 2, right: 0, width: 26, height: 26, borderRadius: 13, justifyContent: 'center', alignItems: 'center' },
-  userName:      { fontSize: 24, fontWeight: '900', marginBottom: 8 },
-  rankBadge:     { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 6, borderRadius: 10, gap: 6, marginBottom: 18 },
-  rankBadgeText: { fontWeight: '800', fontSize: 12 },
-  xpSection:     { width: '100%', paddingHorizontal: HORIZONTAL_MARGIN },
-  xpLabelRow:    { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },
-  xpLabel:       { fontSize: 11, fontWeight: '600' },
-  xpPct:         { fontSize: 11, fontWeight: '800' },
-  xpBar:         { height: 6, borderRadius: 4, overflow: 'hidden' },
-  xpFill:        { height: '100%', borderRadius: 4 },
-  statsRow:      { flexDirection: 'row', paddingHorizontal: HORIZONTAL_MARGIN, marginTop: 20, gap: 10 },
-  statCard:      { flex: 1, borderRadius: 12, padding: 14, alignItems: 'center', gap: 5 },
-  statVal:       { fontSize: 22, fontWeight: '900' },
-  statLabel:     { fontSize: 9, letterSpacing: 1, textTransform: 'uppercase' },
-  section:       { marginHorizontal: HORIZONTAL_MARGIN, marginTop: 20 },
-  sectionLabel:  { fontSize: 11, letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 16 },
-  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  seeAll:        { fontSize: 13, fontWeight: '700' },
-  grid:          { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 14 },
-  badge:         { width: '30.5%', aspectRatio: 1, borderRadius: 12, justifyContent: 'center', alignItems: 'center', borderWidth: 1, gap: 6 },
-  badgeLabel:    { fontSize: 10, fontWeight: '800', textAlign: 'center' },
+  root: { flex: 1, backgroundColor: BG },
+
+  // Top bar
+  topBar:      { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: BORDER },
+  topBarTitle: { color: TEXT, fontSize: 17, fontWeight: '700' },
+  iconBtn:     { width: 36, height: 36, borderRadius: 10, backgroundColor: CARD, borderWidth: 1, borderColor: BORDER, alignItems: 'center', justifyContent: 'center' },
+
+  // Avatar block
+  avatarBlock: { alignItems: 'center', paddingTop: 32, paddingBottom: 28 },
+  avatarWrap:  { position: 'relative', marginBottom: 16 },
+  avatar:      { width: 90, height: 90, borderRadius: 45, borderWidth: 2, borderColor: BORDER },
+  avatarFallback:{ backgroundColor: CARD, alignItems: 'center', justifyContent: 'center' },
+  editDot:     { position: 'absolute', bottom: 0, right: 0, width: 24, height: 24, borderRadius: 12, backgroundColor: ACCENT, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: BG },
+  name:        { color: TEXT, fontSize: 26, fontWeight: '800', letterSpacing: 0.3, marginBottom: 2 },
+  fullName:    { color: SUB, fontSize: 14, marginBottom: 16 },
+  editBtn:     { borderWidth: 1, borderColor: BORDER, borderRadius: 10, paddingHorizontal: 18, paddingVertical: 8 },
+  editBtnTxt:  { color: SUB, fontSize: 13, fontWeight: '600' },
+
+  // Stats
+  statsRow:     { flexDirection: 'row', marginHorizontal: 20, borderRadius: 16, backgroundColor: CARD, borderWidth: 1, borderColor: BORDER, overflow: 'hidden', marginBottom: 28 },
+  statCard:     { flex: 1, alignItems: 'center', paddingVertical: 20, gap: 3 },
+  statDivider:  { width: StyleSheet.hairlineWidth, backgroundColor: BORDER, marginVertical: 14 },
+  statIconWrap: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center', marginBottom: 6 },
+  statValue:    { color: TEXT, fontSize: 26, fontWeight: '900' },
+  statLabel:    { color: MUTED, fontSize: 9, fontWeight: '800', letterSpacing: 1.6 },
+  statSub:      { color: MUTED, fontSize: 11 },
+
+  // Section
+  section:       { marginHorizontal: 20 },
+  sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 },
+  sectionTitle:  { color: TEXT, fontSize: 18, fontWeight: '800' },
+  sectionCount:  { color: MUTED, fontSize: 13 },
+
+  // Empty
+  emptyState: { backgroundColor: CARD, borderRadius: 16, borderWidth: 1, borderColor: BORDER, padding: 32, alignItems: 'center', gap: 8 },
+  emptyTitle: { color: SUB, fontSize: 15, fontWeight: '700' },
+  emptySub:   { color: MUTED, fontSize: 13, textAlign: 'center', lineHeight: 19 },
+
+  // Badge grid
+  badgeGrid:    { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  badgeCard:    {
+    width: '30.5%', aspectRatio: 0.9,
+    backgroundColor: CARD, borderRadius: 16,
+    borderWidth: 1, borderColor: BORDER,
+    alignItems: 'center', justifyContent: 'center',
+    gap: 6, padding: 10, position: 'relative',
+  },
+  badgeLocked:  { opacity: 0.35 },
+  badgeIconWrap:{ width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  badgeName:    { color: TEXT, fontSize: 10, fontWeight: '700', textAlign: 'center', lineHeight: 14 },
+  badgeDate:    { color: MUTED, fontSize: 8, fontWeight: '600' },
+  badgeDot:     { position: 'absolute', top: 8, right: 8, width: 6, height: 6, borderRadius: 3, backgroundColor: ACCENT },
 });

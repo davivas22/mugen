@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useRef } from 'react';
+﻿import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
   StyleSheet,
   View,
@@ -260,6 +260,7 @@ export default function RoomDetailScreen() {
   const [showMenu,    setShowMenu]    = useState(false);
   const [showEditModal,setShowEditModal]=useState(false);
   const [editName,    setEditName]    = useState('');
+  const [editCoverUri,setEditCoverUri]= useState<string | null>(null);
   const [savingEdit,  setSavingEdit]  = useState(false);
 
   // ── Journey ─────────────────────────────────────────────────────────────────
@@ -276,6 +277,7 @@ export default function RoomDetailScreen() {
   // ── Gym / attendance ─────────────────────────────────────────────────────────
   const [useLocation,      setUseLocation]      = useState(false);
   const [useCamera,        setUseCamera]        = useState(false);
+  const [enableBets,       setEnableBets]       = useState(false);
   const [gymLat,           setGymLat]           = useState<number | null>(null);
   const [gymLng,           setGymLng]           = useState<number | null>(null);
   const [gymRadius,        setGymRadius]        = useState(200);
@@ -297,7 +299,14 @@ export default function RoomDetailScreen() {
   const [loadingMsgs,    setLoadingMsgs]    = useState(false);
   const msgScrollRef = useRef<ScrollView>(null);
 
+  // Internal tab navigation
+  const [activeTab, setActiveTab] = useState<'inicio' | 'miembros' | 'chat' | 'viaje'>('inicio');
+
   useEffect(() => attendanceTracker.subscribe(() => setAttState(attendanceTracker.state)), []);
+
+  useEffect(() => {
+    if (activeTab === 'chat' && token && id) loadRoomMessages();
+  }, [activeTab, token]);
 
   // ── Animations ──────────────────────────────────────────────────────────────
   const contentOpacity = useSharedValue(0);
@@ -357,6 +366,7 @@ export default function RoomDetailScreen() {
       }
       setUseLocation(data.challenge?.use_location ?? false);
       setUseCamera(data.challenge?.use_camera ?? false);
+      setEnableBets(data.challenge?.enable_bets ?? false);
       setGymLat(data.challenge?.gym_lat ?? null);
       setGymLng(data.challenge?.gym_lng ?? null);
       setGymRadius(data.challenge?.gym_radius_meters ?? 200);
@@ -668,7 +678,21 @@ export default function RoomDetailScreen() {
     setCopied(true); setTimeout(() => setCopied(false), 2000);
   }, [inviteCode]);
 
-  const handleEdit = () => { setShowMenu(false); setEditName(challengeName); setShowEditModal(true); };
+  const handleEdit = () => { setShowMenu(false); setEditName(challengeName); setEditCoverUri(null); setShowEditModal(true); };
+
+  const handlePickCover = async () => {
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) { Alert.alert('Permiso requerido', 'Necesitamos acceso a tu galería.'); return; }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [16, 9],
+      quality: 0.85,
+    });
+    if (!result.canceled && result.assets[0]) {
+      setEditCoverUri(result.assets[0].uri);
+    }
+  };
 
   const handleSaveBio = async () => {
     const uid = currentUser?.id ?? 'guest';
@@ -680,8 +704,22 @@ export default function RoomDetailScreen() {
     if (!editName.trim() || !token) return;
     setSavingEdit(true);
     try {
-      const res = await challengeApi.update(id, { name: editName.trim() }, token);
-      setChallengeName(res.data.challenge?.name ?? editName.trim());
+      let res;
+      if (editCoverUri) {
+        const form = new FormData();
+        form.append('name', editName.trim());
+        form.append('enable_bets', enableBets ? '1' : '0');
+        const fileName = editCoverUri.split('/').pop() ?? 'cover.jpg';
+        const ext      = fileName.split('.').pop()?.toLowerCase() ?? 'jpg';
+        form.append('cover_image', { uri: editCoverUri, name: fileName, type: `image/${ext}` } as any);
+        res = await challengeApi.updateWithCover(id, form, token);
+      } else {
+        res = await challengeApi.update(id, { name: editName.trim(), enable_bets: enableBets } as any, token);
+      }
+      const updated = res.data.challenge;
+      setChallengeName(updated?.name ?? editName.trim());
+      if (updated?.enable_bets !== undefined) setEnableBets(!!updated.enable_bets);
+      if (updated?.cover_image) setCoverImage(getStorageUrl(updated.cover_image));
       setShowEditModal(false);
     } catch (e: any) { Alert.alert(t('common.error'), e?.response?.data?.message ?? t('roomDetail.updateError')); }
     setSavingEdit(false);
@@ -713,8 +751,8 @@ export default function RoomDetailScreen() {
 
   const isCreator = currentUser && challengeCreatorId && Number(currentUser.id) === challengeCreatorId;
   const isOwnCard = selectedMember && String(selectedMember.id) === String(currentUser?.id);
-  const topPts    = leaderboard.length > 0 ? Math.max(...leaderboard.map(p => p.points), 1) : 1;
-  const memberPct = selectedMember ? Math.min(100, Math.round((selectedMember.points / topPts) * 100)) : 0;
+  const topDays   = leaderboard.length > 0 ? Math.max(...leaderboard.map(p => p.attendance_count), 1) : 1;
+  const memberPct = selectedMember ? Math.min(100, Math.round((selectedMember.attendance_count / topDays) * 100)) : 0;
 
   // ── Días restantes del desafío ────────────────────────────────────────────────
   const daysLeft = (() => {
@@ -738,741 +776,598 @@ export default function RoomDetailScreen() {
     transform: [{ translateY: contentTransY.value }],
   }));
 
+  const QSIZE = (SW - HM * 2 - 12) / 2;
+
   // ─────────────────────────────────────────────────────────────────────────────
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: BG_DARK }} edges={['bottom']}>
       <StatusBar style="light" />
 
+      {/* ══ HERO (fixed, always visible) ══ */}
+      <View style={{ height: 200, position: 'relative' }}>
+        <Image source={{ uri: coverImage || HERO_IMAGE }} style={StyleSheet.absoluteFillObject} contentFit="cover" />
+        <LinearGradient
+          colors={['rgba(7,7,15,0.35)', 'rgba(7,7,15,0.96)']}
+          locations={[0, 0.7]}
+          style={[StyleSheet.absoluteFillObject, { justifyContent: 'space-between', padding: HM, paddingBottom: 16 }]}
+        >
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: insets.top + 6 }}>
+            <Pressable hitSlop={6} onPress={() => router.back()} style={st.iconBtn}>
+              <Ionicons name="arrow-back" size={20} color="#fff" />
+            </Pressable>
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <Pressable onPress={handleCopyCode} style={st.codePill}>
+                <Ionicons name={copied ? 'checkmark' : 'copy-outline'} size={11} color={ACCENT} />
+                <Text style={st.codePillTxt}>{copied ? t('roomDetail.copied') : inviteCode || '...'}</Text>
+              </Pressable>
+              {isCreator && isPrivate && (
+                <Pressable hitSlop={6} onPress={openRequests} style={[st.iconBtn, { backgroundColor: 'rgba(255,0,102,0.18)', position: 'relative' }]}>
+                  <MaterialCommunityIcons name="account-plus-outline" size={18} color={ACCENT} />
+                  {roomRequests.length > 0 && <View style={st.reqBadge}><Text style={st.reqBadgeTxt}>{roomRequests.length}</Text></View>}
+                </Pressable>
+              )}
+              {isCreator && (
+                <Pressable hitSlop={6} onPress={() => setShowMenu(true)} style={st.iconBtn}>
+                  <Ionicons name="ellipsis-vertical" size={18} color="#fff" />
+                </Pressable>
+              )}
+            </View>
+          </View>
+          <View>
+            <Text style={[st.heroTitle, bf('900')]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>
+              {challengeName || `SALA #${id}`}
+            </Text>
+            <View style={st.heroSubRow}>
+              <Ionicons name="people-outline" size={12} color="rgba(255,255,255,0.5)" />
+              <Text style={st.heroSub}>{t('roomDetail.membersCount', { count: leaderboard.length })}</Text>
+              {daysLeft !== null && (
+                <>
+                  <Text style={st.heroSub}> · </Text>
+                  <Ionicons name="time-outline" size={12} color="rgba(255,255,255,0.5)" />
+                  <Text style={st.heroSub}>{t('roomDetail.daysLeft', { count: daysLeft })}</Text>
+                </>
+              )}
+            </View>
+          </View>
+        </LinearGradient>
+      </View>
+
+      {/* ══ TAB BAR ══ */}
+      <View style={st.innerTabBar}>
+        {([
+          { key: 'inicio',   icon: 'home-outline'        as const, label: 'Inicio' },
+          { key: 'miembros', icon: 'people-outline'      as const, label: 'Miembros' },
+          { key: 'chat',     icon: 'chatbubbles-outline' as const, label: 'Chat' },
+          { key: 'viaje',    icon: 'images-outline'      as const, label: 'Mi Viaje' },
+        ]).map(tab => (
+          <Pressable key={tab.key} onPress={() => setActiveTab(tab.key as any)} style={st.innerTabItem}>
+            <Ionicons name={tab.icon} size={18} color={activeTab === tab.key ? ACCENT : TEXT_MUTED} />
+            <Text style={[st.innerTabLabel, activeTab === tab.key && { color: ACCENT }]}>{tab.label}</Text>
+            {activeTab === tab.key && <View style={st.innerTabUnderline} />}
+          </Pressable>
+        ))}
+      </View>
+
+      {/* ══ CHAT TAB — full height, no outer scroll ══ */}
+      {activeTab === 'chat' && (
+        <View style={{ flex: 1, backgroundColor: BG_DARK }}>
+          {loadingMsgs ? (
+            <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+              <ActivityIndicator color={ACCENT} />
+            </View>
+          ) : roomMsgs.length === 0 ? (
+            <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 10 }}>
+              <MaterialCommunityIcons name="message-outline" size={44} color={TEXT_MUTED} />
+              <Text style={{ color: TEXT_MUTED, fontSize: 14 }}>{t('roomDetail.noMessages')}</Text>
+            </View>
+          ) : (
+            <ScrollView
+              ref={msgScrollRef}
+              style={{ flex: 1 }}
+              contentContainerStyle={{ padding: HM, paddingTop: 12, gap: 10 }}
+              showsVerticalScrollIndicator={false}
+            >
+              {roomMsgs.map((m: any) => {
+                const isOwn = String(m.sender_id) === String(currentUser?.id);
+                const avatarUrl = m.sender_avatar ? getStorageUrl(m.sender_avatar) : null;
+                return (
+                  <View key={m.id} style={[st.msgRow, isOwn && { flexDirection: 'row-reverse' }]}>
+                    <MemberAvatar url={avatarUrl} name={m.sender_name} size={30} />
+                    <View style={{ maxWidth: '72%' }}>
+                      {!isOwn && (
+                        <Text style={{ color: TEXT_MUTED, fontSize: 10, fontWeight: '700', marginBottom: 3, marginLeft: 4 }}>{m.sender_name}</Text>
+                      )}
+                      <View style={[st.msgBubble, isOwn && { backgroundColor: ACCENT }]}>
+                        <Text style={[st.msgBubbleTxt, isOwn && { color: '#fff' }]}>{m.content}</Text>
+                      </View>
+                    </View>
+                  </View>
+                );
+              })}
+            </ScrollView>
+          )}
+          <View style={[st.msgInputRow, { marginHorizontal: HM, marginBottom: Math.max(insets.bottom, 12) + 4, marginTop: 8 }]}>
+            <TextInput
+              style={st.msgInput}
+              value={msgText}
+              onChangeText={setMsgText}
+              placeholder={t('roomDetail.writeMessage')}
+              placeholderTextColor={TEXT_MUTED}
+              multiline maxLength={500}
+              returnKeyType="send" submitBehavior="newline"
+            />
+            <Pressable
+              onPress={sendMessage}
+              style={[st.msgSendBtn, (!msgText.trim() || sendingMsg) && { opacity: 0.4 }]}
+              disabled={!msgText.trim() || sendingMsg}
+            >
+              {sendingMsg ? <ActivityIndicator color="#fff" size="small" /> : <Ionicons name="send" size={16} color="#fff" />}
+            </Pressable>
+          </View>
+        </View>
+      )}
+
+      {/* ══ SCROLLABLE TABS ══ */}
+      {activeTab !== 'chat' && (
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: scrollPad }}
         style={{ flex: 1, backgroundColor: BG_DARK }}
       >
+        <Animated.View style={contentStyle}>
 
-        {/* ══════════════════════════════════════════════════════════════════
-            HERO
-        ══════════════════════════════════════════════════════════════════ */}
-        <View style={{ height: 260, position: 'relative' }}>
-          <Image source={{ uri: coverImage || HERO_IMAGE }} style={StyleSheet.absoluteFillObject} contentFit="cover" />
-          <LinearGradient
-            colors={['rgba(7,7,15,0.3)', 'rgba(7,7,15,0.97)']}
-            locations={[0, 0.68]}
-            style={[StyleSheet.absoluteFillObject, {
-              justifyContent: 'space-between', padding: HM, paddingBottom: 22,
-            }]}
-          >
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: insets.top + 8 }}>
-              <Pressable accessibilityRole="button" accessibilityLabel={t('common.back')} hitSlop={6} onPress={() => router.back()} style={st.iconBtn}>
-                <Ionicons name="arrow-back" size={20} color="#fff" />
-              </Pressable>
-              <View style={{ flexDirection: 'row', gap: 8 }}>
-                <Pressable accessibilityRole="button" accessibilityLabel={t('roomDetail.inviteCodeA11y')} onPress={handleCopyCode} style={st.codePill}>
-                  <Ionicons name={copied ? 'checkmark' : 'copy-outline'} size={11} color={ACCENT} />
-                  <Text style={st.codePillTxt}>{copied ? t('roomDetail.copied') : inviteCode || '...'}</Text>
-                </Pressable>
-                <Pressable accessibilityRole="button" accessibilityLabel={t('roomDetail.messagesA11y')} hitSlop={6} onPress={openMessages} style={[st.iconBtn, { backgroundColor: 'rgba(255,0,102,0.18)' }]}>
-                  <MaterialCommunityIcons name="message-text-outline" size={18} color={ACCENT} />
-                </Pressable>
-                {isCreator && isPrivate && (
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel={t('roomDetail.requestsA11y')}
-                    hitSlop={6}
-                    onPress={openRequests}
-                    style={[st.iconBtn, { backgroundColor: 'rgba(255,0,102,0.18)', position: 'relative' }]}
+        {/* ════════════ INICIO TAB ════════════ */}
+        {activeTab === 'inicio' && (
+          <>
+            {/* Quick actions 2x2 grid */}
+            <View style={{ paddingHorizontal: HM, paddingTop: 20, paddingBottom: 4 }}>
+              <Text style={[st.sectionLabel, { marginBottom: 14 }]}>ACCIONES RÁPIDAS</Text>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+                {[
+                  { icon: 'sparkles' as const,        color: '#FF0066', bg: '#FF006618', label: 'WRAPPED',  onPress: () => router.push({ pathname: '/screens/WrappedScreen',     params: { challengeId: String(id), months: '12' } }) },
+                  { icon: 'trophy-outline' as const,  color: '#F59E0B', bg: '#F59E0B18', label: 'APUESTA',  onPress: () => router.push({ pathname: '/screens/PledgeScreen', params: { challengeId: String(id), enableBets: String(enableBets), isCreator: String(!!isCreator) } }) },
+                  { icon: 'calendar-outline' as const,color: '#22C55E', bg: '#22C55E18', label: 'SEMANA',   onPress: () => router.push({ pathname: '/screens/CommitmentsScreen', params: { challengeId: String(id) } }) },
+                  { icon: 'flash-outline' as const,   color: '#60A5FA', bg: '#60A5FA18', label: 'VS SALA',  onPress: () => router.push({ pathname: '/screens/BattleScreen',       params: { challengeId: String(id), challengeName: challengeName || String(id) } }) },
+                ].map(({ icon, color, bg, label, onPress }) => (
+                  <Pressable key={label} onPress={onPress}
+                    style={{ width: QSIZE, backgroundColor: CARD_BG, borderRadius: 16, borderWidth: 1, borderColor: color + '30', padding: 16, alignItems: 'center', gap: 10 }}
                   >
-                    <MaterialCommunityIcons name="account-plus-outline" size={18} color={ACCENT} />
-                    {roomRequests.length > 0 && (
-                      <View style={st.reqBadge}>
-                        <Text style={st.reqBadgeTxt}>{roomRequests.length}</Text>
+                    <View style={{ width: 48, height: 48, borderRadius: 14, backgroundColor: bg, alignItems: 'center', justifyContent: 'center' }}>
+                      <Ionicons name={icon} size={24} color={color} />
+                    </View>
+                    <Text style={{ color: TEXT_LIGHT, fontSize: 11, fontWeight: '800', letterSpacing: 1 }}>{label}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            </View>
+
+            {/* My progress (if own card) */}
+            {isOwnCard && selectedMember && (
+              <View style={{ paddingHorizontal: HM, marginTop: 20 }}>
+                <Text style={[st.sectionLabel, { marginBottom: 12 }]}>MI PROGRESO</Text>
+                <View style={st.card}>
+                  <View style={{ flexDirection: 'row', gap: 10, marginBottom: 14 }}>
+                    <View style={[st.statPill, { flex: 1, justifyContent: 'center', borderColor: ACCENT + '40', backgroundColor: ACCENT + '10' }]}>
+                      <Ionicons name="calendar-outline" size={15} color={ACCENT} />
+                      <Text style={[st.statPillVal, { color: ACCENT }]}>{selectedMember.attendance_count}</Text>
+                      <Text style={st.statPillLbl}>{t('roomDetail.days')}</Text>
+                    </View>
+                    <View style={[st.statPill, { flex: 1, justifyContent: 'center' }]}>
+                      <MaterialCommunityIcons name="fire" size={15} color={GOLD} />
+                      <Text style={st.statPillVal}>{selectedMember.streak ?? 0}</Text>
+                      <Text style={st.statPillLbl}>{t('roomDetail.streak')}</Text>
+                    </View>
+                  </View>
+                  <ProgressBar
+                    pct={challengePct}
+                    label={t('roomDetail.challengeProgress')}
+                    valueText={daysLeft === null ? undefined : t('roomDetail.daysLeft', { count: daysLeft })}
+                  />
+                  {goalText.length > 0 && (
+                    <View style={st.goalChip}>
+                      <Ionicons name="flag-outline" size={12} color={ACCENT} />
+                      <Text style={{ color: TEXT_SUB, fontSize: 11, flex: 1 }}>{goalText}</Text>
+                    </View>
+                  )}
+                  <Pressable
+                    onPress={() => setShowBioModal(true)}
+                    style={{ marginTop: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 10, borderRadius: 12, borderWidth: 1, borderColor: CARD_BORDER }}
+                  >
+                    <Ionicons name="pencil-outline" size={14} color={TEXT_SUB} />
+                    <Text style={{ color: TEXT_SUB, fontSize: 12, fontWeight: '700' }}>Editar bio y meta</Text>
+                  </Pressable>
+                </View>
+              </View>
+            )}
+
+            {/* Attendance — location */}
+            {isOwnCard && useLocation && (
+              <View style={{ paddingHorizontal: HM, marginTop: 20 }}>
+                <Text style={[st.sectionLabel, { marginBottom: 12 }]}>{t('roomDetail.attendance')}</Text>
+                <View style={st.card}>
+                  {!gymLat ? (
+                    <View style={{ alignItems: 'center', gap: 6, paddingVertical: 8 }}>
+                      <Ionicons name="location-outline" size={28} color={TEXT_MUTED} />
+                      <Text style={{ color: TEXT_MUTED, fontSize: 12, textAlign: 'center', lineHeight: 18 }}>
+                        {isCreator ? t('roomDetail.locationHint') : t('roomDetail.locationNotSet')}
+                      </Text>
+                    </View>
+                  ) : (
+                    <>
+                      <View style={{ borderRadius: 14, overflow: 'hidden', marginBottom: 14 }}>
+                        <MapView
+                          key={`${gymLat}-${gymLng}`}
+                          style={{ width: '100%', height: 180 }}
+                          initialRegion={{ latitude: gymLat!, longitude: gymLng!, latitudeDelta: 0.004, longitudeDelta: 0.004 }}
+                          showsUserLocation showsMyLocationButton={false}
+                          scrollEnabled={false} zoomEnabled={false} pitchEnabled={false} rotateEnabled={false}
+                          provider="google" customMapStyle={DARK_MAP_STYLE}
+                        >
+                          <Circle center={{ latitude: gymLat!, longitude: gymLng! }} radius={gymRadius} fillColor="rgba(255,0,102,0.12)" strokeColor={ACCENT} strokeWidth={2} />
+                          <Marker coordinate={{ latitude: gymLat!, longitude: gymLng! }} anchor={{ x: 0.5, y: 1 }}>
+                            <View style={{ alignItems: 'center' }}>
+                              <View style={{ backgroundColor: ACCENT, borderRadius: 22, width: 36, height: 36, alignItems: 'center', justifyContent: 'center', borderWidth: 2.5, borderColor: '#fff' }}>
+                                <Ionicons name="fitness-outline" size={18} color="#fff" />
+                              </View>
+                              <View style={{ width: 2, height: 8, backgroundColor: ACCENT }} />
+                            </View>
+                          </Marker>
+                        </MapView>
                       </View>
-                    )}
-                  </Pressable>
-                )}
-                {isCreator && (
-                  <Pressable accessibilityRole="button" accessibilityLabel={t('roomDetail.optionsA11y')} hitSlop={6} onPress={() => setShowMenu(true)} style={st.iconBtn}>
-                    <Ionicons name="ellipsis-vertical" size={18} color="#fff" />
-                  </Pressable>
-                )}
-              </View>
-            </View>
-
-            <View>
-              <View style={st.heroBadge}>
-                <Text style={st.heroBadgeTxt}>SALA #{id}</Text>
-              </View>
-              <Text style={[st.heroTitle, bf('900')]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{challengeName || `SALA #${id}`}</Text>
-              <View style={st.heroSubRow}>
-                <Ionicons name="people-outline" size={13} color="rgba(255,255,255,0.55)" />
-                <Text style={st.heroSub}>{t('roomDetail.membersCount', { count: leaderboard.length })}</Text>
-              </View>
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 10 }}>
-                <Pressable
-                  style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#FF006622', paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, borderWidth: 1, borderColor: '#FF006666' }}
-                  onPress={() => router.push({ pathname: '/screens/WrappedScreen', params: { challengeId: String(id), months: '12' } })}
-                >
-                  <Ionicons name="sparkles" size={14} color="#FF0066" />
-                  <Text style={{ color: '#FF0066', fontWeight: '800', fontSize: 12 }}>WRAPPED</Text>
-                </Pressable>
-                <Pressable
-                  style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#ffaa0022', paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, borderWidth: 1, borderColor: '#ffaa0066' }}
-                  onPress={() => router.push({ pathname: '/screens/PledgeScreen', params: { challengeId: String(id) } })}
-                >
-                  <Ionicons name="trophy-outline" size={14} color="#ffaa00" />
-                  <Text style={{ color: '#ffaa00', fontWeight: '800', fontSize: 12 }}>APUESTA</Text>
-                </Pressable>
-                <Pressable
-                  style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#00cc6622', paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, borderWidth: 1, borderColor: '#00cc6666' }}
-                  onPress={() => router.push({ pathname: '/screens/CommitmentsScreen', params: { challengeId: String(id) } })}
-                >
-                  <Ionicons name="calendar-outline" size={14} color="#00cc66" />
-                  <Text style={{ color: '#00cc66', fontWeight: '800', fontSize: 12 }}>SEMANA</Text>
-                </Pressable>
-                <Pressable
-                  style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#0066ff22', paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, borderWidth: 1, borderColor: '#0066ff66' }}
-                  onPress={() => router.push({ pathname: '/screens/BattleScreen', params: { challengeId: String(id), challengeName: challengeName || String(id) } })}
-                >
-                  <Ionicons name="flash-outline" size={14} color="#0088ff" />
-                  <Text style={{ color: '#0088ff', fontWeight: '800', fontSize: 12 }}>VS SALA</Text>
-                </Pressable>
-              </View>
-            </View>
-          </LinearGradient>
-        </View>
-
-        <Animated.View style={[{ paddingHorizontal: HM }, contentStyle]}>
-
-          {/* ── SELECTED MEMBER CARD ──────────────────────────────────────── */}
-          {selectedMember && (
-            <Animated.View entering={FadeInDown.duration(280)} style={[st.card, { overflow: 'hidden', marginBottom: 16 }]}>
-              <LinearGradient
-                colors={[ACCENT + '22', 'transparent']}
-                style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 70 }}
-              />
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 16 }}>
-                <MemberAvatar
-                  url={selectedMember.avatar_url ? getStorageUrl(selectedMember.avatar_url) : null}
-                  name={selectedMember.username}
-                  size={74}
-                  borderColor={ACCENT}
-                  borderWidth={2.5}
-                />
-                <View style={{ flex: 1 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                    <Text style={[st.memberName, bf('700')]} numberOfLines={1}>{selectedMember.username}</Text>
-                    {isOwnCard && <View style={st.youBadge}><Text style={st.youBadgeTxt}>{t('roomDetail.you')}</Text></View>}
-                  </View>
-                  <View style={[st.rankBadge, selectedMember.rank === 1 && { borderColor: ACCENT + '60', backgroundColor: ACCENT + '10' }]}>
-                    {selectedMember.rank <= 3 && <RankMedal rank={selectedMember.rank} size={11} />}
-                    <Text style={[st.rankBadgeTxt, selectedMember.rank === 1 && { color: ACCENT }]}>
-                      {t('roomDetail.rank', { rank: selectedMember.rank })}
-                    </Text>
-                  </View>
-                  {isOwnCard && bioText.length > 0 && (
-                    <Text style={{ color: TEXT_MUTED, fontSize: 11, marginTop: 6 }} numberOfLines={2}>{bioText}</Text>
+                      {attState.attendedToday ? (
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                          <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: '#22C55E18', alignItems: 'center', justifyContent: 'center' }}>
+                            <Ionicons name="checkmark-circle" size={28} color="#22C55E" />
+                          </View>
+                          <View>
+                            <Text style={{ color: '#22C55E', fontWeight: '800', fontSize: 14 }}>{t('roomDetail.checkedInToday')}</Text>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 3 }}>
+                              <MaterialCommunityIcons name="fire" size={13} color={GOLD} />
+                              <Text style={{ color: TEXT_MUTED, fontSize: 12 }}>{t('roomDetail.streakShort', { count: attState.streak })}</Text>
+                            </View>
+                          </View>
+                        </View>
+                      ) : (
+                        <>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+                            <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: attState.inRange ? '#22C55E' : TEXT_SUB }} />
+                            <Text style={{ color: attState.inRange ? '#22C55E' : TEXT_SUB, fontSize: 12, fontFamily: FONT_BOLD, letterSpacing: 0.4, flex: 1 }}>
+                              {attState.distance === null ? t('roomDetail.gettingLocation') : attState.inRange ? t('roomDetail.inRange', { distance: attState.distance }) : t('roomDetail.farFromGym', { distance: attState.distance })}
+                            </Text>
+                          </View>
+                          {attState.inRange && attState.secondsInRange < REQUIRED_SECONDS && (
+                            <View style={{ marginBottom: 14 }}>
+                              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
+                                <Text style={{ color: TEXT_MUTED, fontSize: 10, fontFamily: FONT_BOLD, letterSpacing: 0.8 }}>{t('roomDetail.timeInRange')}</Text>
+                                <Text style={{ color: '#22C55E', fontSize: 11, fontFamily: FONT_BOLD }}>
+                                  {(() => { const r = REQUIRED_SECONDS - attState.secondsInRange; return t('roomDetail.timeLeft', { time: `${Math.floor(r / 60)}:${String(r % 60).padStart(2, '0')}` }); })()}
+                                </Text>
+                              </View>
+                              <View style={{ height: 6, backgroundColor: CARD_BORDER, borderRadius: 3, overflow: 'hidden' }}>
+                                <View style={{ width: `${(attState.secondsInRange / REQUIRED_SECONDS) * 100}%`, height: 6, backgroundColor: '#22C55E', borderRadius: 3 }} />
+                              </View>
+                            </View>
+                          )}
+                          {attState.secondsInRange >= REQUIRED_SECONDS && !attState.attendedToday && (
+                            <Pressable
+                              style={[{ height: 50, borderRadius: 14, flexDirection: 'row', gap: 8, alignItems: 'center', justifyContent: 'center', backgroundColor: '#22C55E' }, checkingIn && { opacity: 0.6 }]}
+                              onPress={handleCheckIn} disabled={checkingIn}
+                            >
+                              {checkingIn ? <ActivityIndicator color="#fff" /> : <><Ionicons name="checkmark-circle-outline" size={20} color="#fff" /><Text style={{ color: '#fff', fontSize: 14, fontFamily: FONT_BOLD, letterSpacing: 1 }}>{t('roomDetail.checkInBtn')}</Text></>}
+                            </Pressable>
+                          )}
+                          {attState.streak > 0 && <View style={{ marginTop: 12 }}><StreakRow streak={attState.streak} /></View>}
+                        </>
+                      )}
+                    </>
                   )}
                 </View>
-                {isOwnCard ? (
-                  <Pressable accessibilityRole="button" accessibilityLabel={t('roomDetail.editBioA11y')} hitSlop={6} onPress={() => setShowBioModal(true)} style={st.iconBtnSm}>
-                    <Ionicons name="pencil-outline" size={14} color={TEXT_SUB} />
+              </View>
+            )}
+
+            {/* Attendance — camera */}
+            {isOwnCard && useCamera && (
+              <View style={{ paddingHorizontal: HM, marginTop: useLocation ? 12 : 20 }}>
+                {!useLocation && <Text style={[st.sectionLabel, { marginBottom: 12 }]}>{t('roomDetail.photoAttendance')}</Text>}
+                <View style={st.card}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                    <Ionicons name="camera" size={14} color={ACCENT} />
+                    <Text style={st.sectionLabel}>{t('roomDetail.photoAttendance')}</Text>
+                  </View>
+                  {attState.attendedToday ? (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                      <Ionicons name="checkmark-circle" size={28} color="#22C55E" />
+                      <Text style={{ color: '#22C55E', fontWeight: '800', fontSize: 14 }}>{t('roomDetail.checkedInToday')}</Text>
+                    </View>
+                  ) : pendingToday ? (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                      <Ionicons name="hourglass-outline" size={22} color="#F59E0B" />
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ color: '#F59E0B', fontWeight: '800', fontSize: 14 }}>{t('roomDetail.photoPending')}</Text>
+                        <Text style={{ color: TEXT_MUTED, fontSize: 12, marginTop: 3 }}>{t('roomDetail.photoPendingDesc')}</Text>
+                      </View>
+                    </View>
+                  ) : (
+                    <>
+                      <Text style={{ color: TEXT_MUTED, fontSize: 12, marginBottom: 14 }}>{t('roomDetail.selfieHint')}</Text>
+                      {showCameraPreview && cameraPhotoUri && (
+                        <View style={{ marginBottom: 14 }}>
+                          <Image source={{ uri: cameraPhotoUri }} style={{ width: '100%', height: 180, borderRadius: 12 }} resizeMode="cover" />
+                          <View style={{ flexDirection: 'row', gap: 10, marginTop: 10 }}>
+                            <Pressable onPress={() => { setShowCameraPreview(false); setCameraPhotoUri(null); }} style={{ flex: 1, height: 44, borderRadius: 12, borderWidth: 1.5, borderColor: CARD_BORDER, alignItems: 'center', justifyContent: 'center' }}>
+                              <Text style={{ color: TEXT_MUTED, fontWeight: '700', fontSize: 13 }}>{t('roomDetail.retake')}</Text>
+                            </Pressable>
+                            <Pressable onPress={confirmCameraAttendance} disabled={checkingIn} style={[{ flex: 1, height: 44, borderRadius: 12, backgroundColor: ACCENT, alignItems: 'center', justifyContent: 'center' }, checkingIn && { opacity: 0.6 }]}>
+                              {checkingIn ? <ActivityIndicator color="#fff" size="small" /> : <Text style={{ color: '#fff', fontSize: 13, fontFamily: FONT_BOLD, letterSpacing: 0.8 }}>{t('roomDetail.sendPhoto')}</Text>}
+                            </Pressable>
+                          </View>
+                        </View>
+                      )}
+                      {!showCameraPreview && (
+                        <Pressable onPress={handleCameraAttendance} style={{ height: 50, borderRadius: 14, flexDirection: 'row', gap: 8, alignItems: 'center', justifyContent: 'center', backgroundColor: ACCENT }}>
+                          <Ionicons name="camera-outline" size={20} color="#fff" />
+                          <Text style={{ color: '#fff', fontSize: 14, fontFamily: FONT_BOLD, letterSpacing: 1 }}>{t('roomDetail.takePhoto')}</Text>
+                        </Pressable>
+                      )}
+                      {attState.streak > 0 && <View style={{ marginTop: 12 }}><StreakRow streak={attState.streak} /></View>}
+                    </>
+                  )}
+                  {pendingAttendances.length > 0 && (
+                    <View style={{ marginTop: 20, borderTopWidth: 1, borderTopColor: CARD_BORDER, paddingTop: 16 }}>
+                      <Text style={{ color: TEXT_MUTED, fontSize: 11, fontWeight: '700', letterSpacing: 1, marginBottom: 12 }}>{t('roomDetail.confirmCompanions')}</Text>
+                      {pendingAttendances.map((pa: any) => (
+                        <View key={pa.id} style={{ marginBottom: 16 }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+                            <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: ACCENT, alignItems: 'center', justifyContent: 'center' }}>
+                              <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>{(pa.user_name?.[0] ?? '?').toUpperCase()}</Text>
+                            </View>
+                            <Text style={{ color: TEXT_LIGHT, fontWeight: '700', fontSize: 13 }}>{pa.user_name}</Text>
+                          </View>
+                          {pa.photo_path && <Image source={{ uri: getStorageUrl(pa.photo_path) ?? undefined }} style={{ width: '100%', height: 180, borderRadius: 10, marginBottom: 10 }} resizeMode="cover" />}
+                          <View style={{ flexDirection: 'row', gap: 10 }}>
+                            <Pressable onPress={() => handleRejectAttendance(pa.id)} disabled={confirmingId === pa.id} style={[{ flex: 1, height: 44, borderRadius: 12, backgroundColor: CARD_BORDER, alignItems: 'center', justifyContent: 'center' }, confirmingId === pa.id && { opacity: 0.6 }]}>
+                              {confirmingId === pa.id ? <ActivityIndicator color="#fff" size="small" /> : <Text style={{ color: '#fff', fontSize: 12, fontFamily: FONT_BOLD }}>{t('roomDetail.reject')}</Text>}
+                            </Pressable>
+                            <Pressable onPress={() => handleConfirmAttendance(pa.id)} disabled={confirmingId === pa.id} style={[{ flex: 1, height: 44, borderRadius: 12, backgroundColor: '#22C55E', alignItems: 'center', justifyContent: 'center' }, confirmingId === pa.id && { opacity: 0.6 }]}>
+                              {confirmingId === pa.id ? <ActivityIndicator color="#fff" size="small" /> : <Text style={{ color: '#fff', fontSize: 12, fontFamily: FONT_BOLD }}>{t('roomDetail.confirmInGym')}</Text>}
+                            </Pressable>
+                          </View>
+                        </View>
+                      ))}
+                    </View>
+                  )}
+                </View>
+              </View>
+            )}
+          </>
+        )}
+
+        {/* ════════════ MIEMBROS TAB ════════════ */}
+        {activeTab === 'miembros' && (
+          <>
+            {loadingLB ? (
+              <ActivityIndicator color={ACCENT} style={{ marginVertical: 32 }} />
+            ) : (
+              <>
+                {/* Compact member selector */}
+                <ScrollView
+                  horizontal showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={{ paddingHorizontal: HM, paddingTop: 16, paddingBottom: 12, gap: 10 }}
+                >
+                  {leaderboard.map(member => {
+                    const isSelected = selectedMember?.id === member.id;
+                    const isMe = String(member.id) === String(currentUser?.id);
+                    const avatarUrl = member.avatar_url ? getStorageUrl(member.avatar_url) : null;
+                    return (
+                      <Pressable
+                        key={member.id}
+                        onPress={() => { setSelectedMember(member); setCompareMode(false); setCompareTarget(null); }}
+                        style={[st.memberTab, isSelected && st.memberTabActive]}
+                      >
+                        {isSelected && <View style={st.tabGlowRing} />}
+                        <MemberAvatar url={avatarUrl} name={member.username} size={60} borderColor={isSelected ? ACCENT : isMe ? ACCENT + '60' : 'rgba(255,255,255,0.08)'} borderWidth={isSelected ? 2.5 : 1.5} />
+                        <Text style={[st.tabName, isSelected && { color: ACCENT }]} numberOfLines={1}>{member.username.split(' ')[0]}{isMe ? ' (tú)' : ''}</Text>
+                        <Text style={[st.tabPts, isSelected && { color: ACCENT + 'CC' }]}>{member.attendance_count} días</Text>
+                      </Pressable>
+                    );
+                  })}
+                </ScrollView>
+
+                {/* Selected member card */}
+                {selectedMember && (
+                  <Animated.View entering={FadeInDown.duration(280)} style={[st.card, { marginHorizontal: HM, marginBottom: 16, overflow: 'hidden' }]}>
+                    <LinearGradient colors={[ACCENT + '22', 'transparent']} style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 70 }} />
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 16 }}>
+                      <MemberAvatar url={selectedMember.avatar_url ? getStorageUrl(selectedMember.avatar_url) : null} name={selectedMember.username} size={64} borderColor={ACCENT} borderWidth={2.5} />
+                      <View style={{ flex: 1 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                          <Text style={[st.memberName, bf('700')]} numberOfLines={1}>{selectedMember.username}</Text>
+                          {isOwnCard && <View style={st.youBadge}><Text style={st.youBadgeTxt}>{t('roomDetail.you')}</Text></View>}
+                        </View>
+                        {isOwnCard && bioText.length > 0 && (
+                          <Text style={{ color: TEXT_MUTED, fontSize: 11, marginTop: 4 }} numberOfLines={2}>{bioText}</Text>
+                        )}
+                      </View>
+                      {!isOwnCard && (
+                        <Pressable
+                          hitSlop={6}
+                          onPress={() => { setCompareTarget(selectedMember); setCompareMode(true); }}
+                          style={[st.iconBtnSm, compareMode && { backgroundColor: ACCENT + '20', borderColor: ACCENT + '50' }]}
+                        >
+                          <Ionicons name="git-compare-outline" size={14} color={compareMode ? ACCENT : TEXT_SUB} />
+                        </Pressable>
+                      )}
+                    </View>
+                    <View style={{ flexDirection: 'row', gap: 10, marginBottom: 14 }}>
+                      <StatPill icon="calendar-outline" value={selectedMember.attendance_count} label={t('roomDetail.days')} accent />
+                      <StatPill icon="flame-outline" value={selectedMember.streak ?? 0} label={t('roomDetail.streak')} />
+                    </View>
+                    <ProgressBar pct={challengePct} label={t('roomDetail.challengeProgress')} valueText={daysLeft === null ? undefined : t('roomDetail.daysLeft', { count: daysLeft })} />
+                    {!isOwnCard && (
+                      <Pressable
+                        onPress={() => setShowProfileModal(true)}
+                        style={{ marginTop: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 10, borderRadius: 12, borderWidth: 1, borderColor: CARD_BORDER }}
+                      >
+                        <Ionicons name="person-outline" size={14} color={TEXT_SUB} />
+                        <Text style={{ color: TEXT_SUB, fontSize: 12, fontWeight: '700' }}>{t('roomDetail.viewProfile')}</Text>
+                      </Pressable>
+                    )}
+                  </Animated.View>
+                )}
+
+                {/* Compare */}
+                {compareMode && compareTarget && (() => {
+                  const me = leaderboard.find(p => String(p.id) === String(currentUser?.id));
+                  if (!me) return null;
+                  return (
+                    <Animated.View entering={FadeInDown.duration(300)} style={[st.card, { marginHorizontal: HM, marginBottom: 16 }]}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+                        <Ionicons name="git-compare-outline" size={15} color={ACCENT} />
+                        <Text style={[st.sectionLabel, { marginBottom: 0 }]}>{t('roomDetail.compare')}</Text>
+                        <View style={{ flex: 1 }} />
+                        <Pressable hitSlop={8} onPress={() => { setCompareMode(false); setCompareTarget(null); }}>
+                          <Ionicons name="close-circle" size={20} color={TEXT_MUTED} />
+                        </Pressable>
+                      </View>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center', marginBottom: 18 }}>
+                        <View style={{ alignItems: 'center', gap: 5 }}>
+                          <MemberAvatar url={me.avatar_url ? getStorageUrl(me.avatar_url) : null} name={me.username} size={50} borderColor={ACCENT} borderWidth={2} />
+                          <Text style={{ color: TEXT_LIGHT, fontSize: 11, fontWeight: '700' }}>{me.username.split(' ')[0]}</Text>
+                          <View style={st.youBadge}><Text style={st.youBadgeTxt}>{t('roomDetail.you')}</Text></View>
+                        </View>
+                        <View style={st.vsCircle}><Text style={{ color: ACCENT, fontWeight: '900', fontSize: 16 }}>{t('roomDetail.vs')}</Text></View>
+                        <View style={{ alignItems: 'center', gap: 5 }}>
+                          <MemberAvatar url={compareTarget.avatar_url ? getStorageUrl(compareTarget.avatar_url) : null} name={compareTarget.username} size={50} />
+                          <Text style={{ color: TEXT_LIGHT, fontSize: 11, fontWeight: '700' }}>{compareTarget.username.split(' ')[0]}</Text>
+                        </View>
+                      </View>
+                      <CompareRow label={t('roomDetail.rowSessions')} a={me.sessions} b={compareTarget.sessions} aName={me.username} bName={compareTarget.username} />
+                      <CompareRow label={t('roomDetail.rowReps')} a={me.total_reps} b={compareTarget.total_reps} aName={me.username} bName={compareTarget.username} />
+                    </Animated.View>
+                  );
+                })()}
+
+                {/* Period + Leaderboard */}
+                <View style={{ paddingHorizontal: HM }}>
+                  <View style={{ flexDirection: 'row', gap: 8, marginBottom: 14 }}>
+                    {(['semana', 'mes', 'año'] as const).map(p => (
+                      <Pressable key={p} onPress={() => { setSelectedPeriod(p); fetchLeaderboard(token, p); }} style={[st.filterBtn, selectedPeriod === p && { backgroundColor: ACCENT }]}>
+                        <Text style={[st.filterTxt, selectedPeriod === p && { color: '#fff' }]}>
+                          {p === 'semana' ? t('roomDetail.periodWeek') : p === 'mes' ? t('roomDetail.periodMonth') : t('roomDetail.periodYear')}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                  <Text style={[st.sectionLabel, { marginBottom: 12 }]}>{t('roomDetail.leaderboard')}</Text>
+                  {leaderboard.map(p => {
+                    const isMe = String(p.id) === String(currentUser?.id);
+                    const avatarUrl = p.avatar_url ? getStorageUrl(p.avatar_url) : null;
+                    return (
+                      <Pressable
+                        key={p.id}
+                        onPress={() => { setSelectedMember(p); setCompareMode(false); setCompareTarget(null); }}
+                        style={[st.participantCard, isMe && { borderColor: ACCENT + '50', backgroundColor: ACCENT + '08' }]}
+                      >
+                        <MemberAvatar url={avatarUrl} name={p.username} size={36} borderColor={isMe ? ACCENT : 'transparent'} borderWidth={isMe ? 1.5 : 0} />
+                        <Text style={[st.participantName, bf('700'), isMe && { color: ACCENT }]} numberOfLines={1}>
+                          {p.username}{isMe ? ` (${t('common.you')})` : ''}
+                        </Text>
+                        <View style={st.pStats}>
+                          <View style={{ alignItems: 'center' }}>
+                            <Text style={st.pStatVal}>{p.attendance_count}</Text>
+                            <Text style={st.pStatLbl}>{t('roomDetail.days')}</Text>
+                          </View>
+                          <View style={st.pDivider} />
+                          <View style={{ alignItems: 'center' }}>
+                            <Text style={st.pStatVal}>{p.streak ?? 0}</Text>
+                            <Text style={st.pStatLbl}>{t('roomDetail.streak')}</Text>
+                          </View>
+                        </View>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </>
+            )}
+          </>
+        )}
+
+        {/* ════════════ MI VIAJE TAB ════════════ */}
+        {activeTab === 'viaje' && (
+          <View style={{ paddingHorizontal: HM, paddingTop: 16 }}>
+            {!isOwnCard ? (
+              <View style={{ alignItems: 'center', paddingVertical: 40, gap: 10 }}>
+                <Ionicons name="images-outline" size={40} color={TEXT_MUTED} />
+                <Text style={{ color: TEXT_MUTED, fontSize: 13, textAlign: 'center', lineHeight: 20 }}>
+                  El viaje es personal. Selecciona tu propio perfil para ver tu progreso.
+                </Text>
+                <Pressable
+                  onPress={() => {
+                    const me = leaderboard.find(p => String(p.id) === String(currentUser?.id));
+                    if (me) { setSelectedMember(me); setCompareMode(false); }
+                  }}
+                  style={{ marginTop: 8, paddingHorizontal: 20, paddingVertical: 10, borderRadius: 12, borderWidth: 1, borderColor: CARD_BORDER }}
+                >
+                  <Text style={{ color: TEXT_SUB, fontWeight: '700', fontSize: 13 }}>Ver mi perfil</Text>
+                </Pressable>
+              </View>
+            ) : (
+              <>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+                  <View>
+                    <Text style={st.sectionLabel}>{t('roomDetail.myJourney')}</Text>
+                    <Text style={{ color: TEXT_MUTED, fontSize: 11, marginTop: 3 }}>{t('roomDetail.myJourneyDesc')}</Text>
+                  </View>
+                  <Pressable onPress={openJourneyModal} style={st.addJourneyBtn}>
+                    <Ionicons name="add" size={20} color="#fff" />
+                    <Text style={{ color: '#fff', fontSize: 11, fontFamily: FONT_BOLD, letterSpacing: 0.8 }}>{t('roomDetail.add')}</Text>
+                  </Pressable>
+                </View>
+                {journey.length === 0 ? (
+                  <Pressable onPress={openJourneyModal} style={st.journeyEmpty}>
+                    <LinearGradient colors={[ACCENT + '10', '#6B35FF10']} style={StyleSheet.absoluteFillObject} />
+                    <View style={st.journeyEmptyIcon}>
+                      <MaterialCommunityIcons name="image-plus" size={36} color={ACCENT} />
+                    </View>
+                    <Text style={{ color: TEXT_LIGHT, fontSize: 16, fontFamily: FONT_BOLD, letterSpacing: 0.4, marginTop: 12 }}>{t('roomDetail.journeyEmptyTitle')}</Text>
+                    <Text style={{ color: TEXT_MUTED, fontSize: 12, marginTop: 4, textAlign: 'center' }}>{t('roomDetail.journeyEmptyDesc')}</Text>
+                    <View style={[st.addJourneyBtn, { marginTop: 14 }]}>
+                      <Ionicons name="camera" size={16} color="#fff" />
+                      <Text style={{ color: '#fff', fontSize: 11, fontFamily: FONT_BOLD, letterSpacing: 0.8 }}>{t('roomDetail.firstPhoto')}</Text>
+                    </View>
                   </Pressable>
                 ) : (
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel={t('roomDetail.compareA11y')}
-                    accessibilityState={{ selected: compareMode }}
-                    hitSlop={6}
-                    onPress={() => { setCompareTarget(selectedMember); setCompareMode(true); }}
-                    style={[st.iconBtnSm, compareMode && { backgroundColor: ACCENT + '20', borderColor: ACCENT + '50' }]}
-                  >
-                    <Ionicons name="git-compare-outline" size={14} color={compareMode ? ACCENT : TEXT_SUB} />
-                  </Pressable>
+                  <View style={st.journeyGrid}>
+                    {journey.map((entry, idx) => (
+                      <Pressable key={entry.id} style={[st.journeyCard, idx % 2 === 0 && { marginRight: 8 }]} onLongPress={() => deleteJourneyEntry(entry.id)}>
+                        <Image source={{ uri: entry.imageUri }} style={st.journeyImg} contentFit="cover" />
+                        <LinearGradient colors={['transparent', 'rgba(7,7,15,0.9)']} style={st.journeyOverlay} />
+                        <View style={st.journeyDateChip}>
+                          <Ionicons name="calendar-outline" size={9} color={ACCENT} />
+                          <Text style={st.journeyDateTxt}>{formatJourneyDate(entry.date)}</Text>
+                        </View>
+                        {entry.note.length > 0 && <Text style={st.journeyNote} numberOfLines={2}>{entry.note}</Text>}
+                        {idx === journey.length - 1 && <View style={st.journeyBadge}><Text style={st.journeyBadgeTxt}>{t('roomDetail.journeyStart')}</Text></View>}
+                        {idx === 0 && journey.length > 1 && <View style={[st.journeyBadge, { backgroundColor: ACCENT }]}><Text style={st.journeyBadgeTxt}>{t('roomDetail.journeyNow')}</Text></View>}
+                      </Pressable>
+                    ))}
+                  </View>
                 )}
-              </View>
-
-              <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
-                <StatPill icon="trophy-outline" value={selectedMember.points}    label={t('roomDetail.pts')}      accent />
-                <StatPill icon="calendar-outline" value={selectedMember.attendance_count} label={t('roomDetail.days')} />
-                <StatPill icon="flame-outline" value={selectedMember.streak ?? 0} label={t('roomDetail.streak')} />
-              </View>
-
-              <ProgressBar
-                pct={challengePct}
-                label={t('roomDetail.challengeProgress')}
-                valueText={daysLeft === null ? undefined : t('roomDetail.daysLeft', { count: daysLeft })}
-              />
-
-              {isOwnCard && goalText.length > 0 && (
-                <View style={st.goalChip}>
-                  <Ionicons name="flag-outline" size={12} color={ACCENT} />
-                  <Text style={{ color: TEXT_SUB, fontSize: 11, flex: 1 }}>{goalText}</Text>
-                </View>
-              )}
-
-              {!isOwnCard && (
-                <Pressable
-                  onPress={() => setShowProfileModal(true)}
-                  style={{ marginTop: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 10, borderRadius: 12, borderWidth: 1, borderColor: CARD_BORDER }}
-                >
-                  <Ionicons name="person-outline" size={14} color={TEXT_SUB} />
-                  <Text style={{ color: TEXT_SUB, fontSize: 12, fontWeight: '700' }}>{t('roomDetail.viewProfile')}</Text>
-                </Pressable>
-              )}
-            </Animated.View>
-          )}
-
-
-          {/* ══════════════════════════════════════════════════════════════
-              ASISTENCIA AL GYM — check-in por ubicación
-          ══════════════════════════════════════════════════════════════ */}
-          {isOwnCard && useLocation && (
-            <Animated.View entering={FadeInDown.duration(280)} style={[st.card, { marginTop: 16, marginBottom: 4 }]}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 14 }}>
-                <Ionicons name="location" size={14} color={ACCENT} />
-                <Text style={st.sectionLabel}>{t('roomDetail.attendance')}</Text>
-              </View>
-
-              {!gymLat ? (
-                <View style={{ alignItems: 'center', gap: 6, paddingVertical: 8 }}>
-                  <Ionicons name="location-outline" size={28} color={TEXT_MUTED} />
-                  <Text style={{ color: TEXT_MUTED, fontSize: 12, textAlign: 'center', lineHeight: 18 }}>
-                    {isCreator
-                      ? t('roomDetail.locationHint')
-                      : t('roomDetail.locationNotSet')}
+                {journey.length > 0 && (
+                  <Text style={{ color: TEXT_MUTED, fontSize: 10, textAlign: 'center', marginTop: 4, marginBottom: 4 }}>
+                    {t('roomDetail.holdToDelete', { count: journey.length })}
                   </Text>
-                </View>
-              ) : (
-                <>
-                  {/* Mini mapa siempre visible cuando hay gym location */}
-                  <View style={{ borderRadius: 14, overflow: 'hidden', marginBottom: 14 }}>
-                    <MapView
-                      key={`${gymLat}-${gymLng}`}
-                      style={{ width: '100%', height: 190 }}
-                      initialRegion={{
-                        latitude: gymLat!,
-                        longitude: gymLng!,
-                        latitudeDelta: 0.004,
-                        longitudeDelta: 0.004,
-                      }}
-                      showsUserLocation
-                      showsMyLocationButton={false}
-                      scrollEnabled={false}
-                      zoomEnabled={false}
-                      pitchEnabled={false}
-                      rotateEnabled={false}
-                      provider="google"
-                      customMapStyle={DARK_MAP_STYLE}
-                    >
-                      <Circle
-                        center={{ latitude: gymLat!, longitude: gymLng! }}
-                        radius={gymRadius}
-                        fillColor="rgba(255,0,102,0.12)"
-                        strokeColor={ACCENT}
-                        strokeWidth={2}
-                      />
-                      <Marker
-                        coordinate={{ latitude: gymLat!, longitude: gymLng! }}
-                        anchor={{ x: 0.5, y: 1 }}
-                      >
-                        <View style={{ alignItems: 'center' }}>
-                          <View style={{
-                            backgroundColor: ACCENT, borderRadius: 22, width: 36, height: 36,
-                            alignItems: 'center', justifyContent: 'center',
-                            borderWidth: 2.5, borderColor: '#fff',
-                            shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
-                            shadowOpacity: 0.4, shadowRadius: 4, elevation: 6,
-                          }}>
-                            <Ionicons name="fitness-outline" size={18} color="#fff" />
-                          </View>
-                          <View style={{ width: 2, height: 8, backgroundColor: ACCENT }} />
-                        </View>
-                      </Marker>
-                    </MapView>
-                  </View>
-                </>
-              )}
-
-              {gymLat && attState.attendedToday ? (
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                  <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: '#22C55E18', alignItems: 'center', justifyContent: 'center' }}>
-                    <Ionicons name="checkmark-circle" size={28} color="#22C55E" />
-                  </View>
-                  <View>
-                    <Text style={{ color: '#22C55E', fontWeight: '800', fontSize: 14 }}>{t('roomDetail.checkedInToday')}</Text>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 3 }}>
-                      <MaterialCommunityIcons name="fire" size={13} color={GOLD} />
-                      <Text style={{ color: TEXT_MUTED, fontSize: 12 }}>
-                        {t('roomDetail.streakShort', { count: attState.streak })}
-                      </Text>
-                    </View>
-                  </View>
-                </View>
-              ) : (
-                <>
-                  {/* Status indicator */}
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 14 }}>
-                    <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: attState.inRange ? '#22C55E' : TEXT_SUB }} />
-                    <Text style={{ color: attState.inRange ? '#22C55E' : TEXT_SUB, fontSize: 12, fontFamily: FONT_BOLD, letterSpacing: 0.4, flex: 1 }}>
-                      {attState.distance === null
-                        ? t('roomDetail.gettingLocation')
-                        : attState.inRange
-                          ? t('roomDetail.inRange', { distance: attState.distance })
-                          : t('roomDetail.farFromGym', { distance: attState.distance })}
-                    </Text>
-                    {!attState.inRange && attState.distance !== null && (
-                      <Text style={{ color: TEXT_MUTED, fontSize: 10, fontFamily: FONT_BOLD }}>{t('roomDetail.radius', { count: attState.gymRadius })}</Text>
-                    )}
-                  </View>
-
-                  {/* Progress bar - only when in range and timer running */}
-                  {attState.inRange && attState.secondsInRange < REQUIRED_SECONDS && (
-                    <View style={{ marginBottom: 14 }}>
-                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
-                        <Text style={{ color: TEXT_MUTED, fontSize: 10, fontFamily: FONT_BOLD, letterSpacing: 0.8 }}>{t('roomDetail.timeInRange')}</Text>
-                        <Text style={{ color: '#22C55E', fontSize: 11, fontFamily: FONT_BOLD, letterSpacing: 0.4 }}>
-                          {(() => { const r = REQUIRED_SECONDS - attState.secondsInRange; return t('roomDetail.timeLeft', { time: `${Math.floor(r / 60)}:${String(r % 60).padStart(2, '0')}` }); })()}
-                        </Text>
-                      </View>
-                      <View style={{ height: 6, backgroundColor: CARD_BORDER, borderRadius: 3, overflow: 'hidden' }}>
-                        <View style={{ width: `${(attState.secondsInRange / REQUIRED_SECONDS) * 100}%`, height: 6, backgroundColor: '#22C55E', borderRadius: 3 }} />
-                      </View>
-                      <Text style={{ color: TEXT_MUTED, fontSize: 10, marginTop: 6, textAlign: 'center' }}>
-                        {t('roomDetail.stayHint')}
-                      </Text>
-                    </View>
-                  )}
-
-                  {/* Check-in button — only after timer complete */}
-                  {attState.secondsInRange >= REQUIRED_SECONDS && !attState.attendedToday && (
-                    <Pressable
-                      style={[{
-                        height: 50, borderRadius: 14, flexDirection: 'row', gap: 8,
-                        alignItems: 'center', justifyContent: 'center',
-                        backgroundColor: '#22C55E',
-                      }, checkingIn && { opacity: 0.6 }]}
-                      onPress={handleCheckIn}
-                      disabled={checkingIn}
-                    >
-                      {checkingIn
-                        ? <ActivityIndicator color="#fff" />
-                        : <>
-                            <Ionicons name="checkmark-circle-outline" size={20} color="#fff" />
-                            <Text style={{ color: '#fff', fontSize: 14, fontFamily: FONT_BOLD, letterSpacing: 1 }}>{t('roomDetail.checkInBtn')}</Text>
-                          </>
-                      }
-                    </Pressable>
-                  )}
-
-                  {/* Streak preview */}
-                  {attState.streak > 0 && (
-                    <View style={{ marginTop: 12 }}>
-                      <StreakRow streak={attState.streak} />
-                    </View>
-                  )}
-                </>
-              )}
-            </Animated.View>
-          )}
-
-          {/* ══════════════════════════════════════════════════════════════
-              ASISTENCIA POR FOTO
-          ══════════════════════════════════════════════════════════════ */}
-          {isOwnCard && useCamera && (
-            <Animated.View entering={FadeInDown.duration(280)} style={[st.card, { marginTop: 16, marginBottom: 4 }]}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 14 }}>
-                <Ionicons name="camera" size={14} color={ACCENT} />
-                <Text style={st.sectionLabel}>{t('roomDetail.photoAttendance')}</Text>
-              </View>
-
-              {attState.attendedToday ? (
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                  <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: '#22C55E20', alignItems: 'center', justifyContent: 'center' }}>
-                    <Ionicons name="checkmark-circle" size={22} color="#22C55E" />
-                  </View>
-                  <View>
-                    <Text style={{ color: '#22C55E', fontWeight: '800', fontSize: 14 }}>{t('roomDetail.checkedInToday')}</Text>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 3 }}>
-                      <MaterialCommunityIcons name="fire" size={13} color={GOLD} />
-                      <Text style={{ color: TEXT_MUTED, fontSize: 12 }}>{t('roomDetail.streakShort', { count: attState.streak })}</Text>
-                    </View>
-                  </View>
-                </View>
-              ) : pendingToday ? (
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                  <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: '#F59E0B20', alignItems: 'center', justifyContent: 'center' }}>
-                    <Ionicons name="hourglass-outline" size={20} color="#F59E0B" />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ color: '#F59E0B', fontWeight: '800', fontSize: 14 }}>{t('roomDetail.photoPending')}</Text>
-                    <Text style={{ color: TEXT_MUTED, fontSize: 12, marginTop: 3 }}>{t('roomDetail.photoPendingDesc')}</Text>
-                  </View>
-                </View>
-              ) : (
-                <>
-                  <Text style={{ color: TEXT_MUTED, fontSize: 12, marginBottom: 14 }}>
-                    {t('roomDetail.selfieHint')}
-                  </Text>
-
-                  {showCameraPreview && cameraPhotoUri && (
-                    <View style={{ marginBottom: 14 }}>
-                      <Image source={{ uri: cameraPhotoUri }} style={{ width: '100%', height: 180, borderRadius: 12 }} resizeMode="cover" />
-                      <View style={{ flexDirection: 'row', gap: 10, marginTop: 10 }}>
-                        <Pressable
-                          onPress={() => { setShowCameraPreview(false); setCameraPhotoUri(null); }}
-                          style={{ flex: 1, height: 44, borderRadius: 12, borderWidth: 1.5, borderColor: CARD_BORDER, alignItems: 'center', justifyContent: 'center' }}
-                        >
-                          <Text style={{ color: TEXT_MUTED, fontWeight: '700', fontSize: 13 }}>{t('roomDetail.retake')}</Text>
-                        </Pressable>
-                        <Pressable
-                          onPress={confirmCameraAttendance}
-                          disabled={checkingIn}
-                          style={[{ flex: 1, height: 44, borderRadius: 12, backgroundColor: ACCENT, alignItems: 'center', justifyContent: 'center' }, checkingIn && { opacity: 0.6 }]}
-                        >
-                          {checkingIn
-                            ? <ActivityIndicator color="#fff" size="small" />
-                            : <Text style={{ color: '#fff', fontSize: 13, fontFamily: FONT_BOLD, letterSpacing: 0.8 }}>{t('roomDetail.sendPhoto')}</Text>
-                          }
-                        </Pressable>
-                      </View>
-                    </View>
-                  )}
-
-                  {!showCameraPreview && (
-                    <Pressable
-                      onPress={handleCameraAttendance}
-                      style={{ height: 50, borderRadius: 14, flexDirection: 'row', gap: 8, alignItems: 'center', justifyContent: 'center', backgroundColor: ACCENT }}
-                    >
-                      <Ionicons name="camera-outline" size={20} color="#fff" />
-                      <Text style={{ color: '#fff', fontSize: 14, fontFamily: FONT_BOLD, letterSpacing: 1 }}>{t('roomDetail.takePhoto')}</Text>
-                    </Pressable>
-                  )}
-
-                  {attState.streak > 0 && (
-                    <View style={{ marginTop: 12 }}>
-                      <StreakRow streak={attState.streak} />
-                    </View>
-                  )}
-                </>
-              )}
-
-              {/* Fotos de compañeros pendientes de confirmación */}
-              {pendingAttendances.length > 0 && (
-                <View style={{ marginTop: 20, borderTopWidth: 1, borderTopColor: CARD_BORDER, paddingTop: 16 }}>
-                  <Text style={{ color: TEXT_MUTED, fontSize: 11, fontWeight: '700', letterSpacing: 1, marginBottom: 12 }}>
-                    {t('roomDetail.confirmCompanions')}
-                  </Text>
-                  {pendingAttendances.map((pa: any) => (
-                    <View key={pa.id} style={{ marginBottom: 16 }}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-                        <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: ACCENT, alignItems: 'center', justifyContent: 'center' }}>
-                          <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>
-                            {(pa.user_name?.[0] ?? '?').toUpperCase()}
-                          </Text>
-                        </View>
-                        <View>
-                          <Text style={{ color: TEXT_LIGHT, fontWeight: '700', fontSize: 13 }}>{pa.user_name}</Text>
-                          <Text style={{ color: TEXT_MUTED, fontSize: 11 }}>{t('roomDetail.confirmCompanionsDesc')}</Text>
-                        </View>
-                      </View>
-                      {pa.photo_path && (
-                        <Image
-                          source={{ uri: getStorageUrl(pa.photo_path) ?? undefined }}
-                          style={{ width: '100%', height: 180, borderRadius: 10, marginBottom: 10 }}
-                          resizeMode="cover"
-                        />
-                      )}
-                      <View style={{ flexDirection: 'row', gap: 10 }}>
-                        <Pressable
-                          onPress={() => handleRejectAttendance(pa.id)}
-                          disabled={confirmingId === pa.id}
-                          style={[{ flex: 1, height: 44, borderRadius: 12, backgroundColor: CARD_BORDER, alignItems: 'center', justifyContent: 'center' }, confirmingId === pa.id && { opacity: 0.6 }]}
-                        >
-                          {confirmingId === pa.id
-                            ? <ActivityIndicator color="#fff" size="small" />
-                            : <Text style={{ color: '#fff', fontSize: 12, fontFamily: FONT_BOLD, letterSpacing: 0.6 }}>{t('roomDetail.reject')}</Text>
-                          }
-                        </Pressable>
-                        <Pressable
-                          onPress={() => handleConfirmAttendance(pa.id)}
-                          disabled={confirmingId === pa.id}
-                          style={[{ flex: 1, height: 44, borderRadius: 12, backgroundColor: '#22C55E', alignItems: 'center', justifyContent: 'center' }, confirmingId === pa.id && { opacity: 0.6 }]}
-                        >
-                          {confirmingId === pa.id
-                            ? <ActivityIndicator color="#fff" size="small" />
-                            : <Text style={{ color: '#fff', fontSize: 12, fontFamily: FONT_BOLD, letterSpacing: 0.6 }}>{t('roomDetail.confirmInGym')}</Text>
-                          }
-                        </Pressable>
-                      </View>
-                    </View>
-                  ))}
-                </View>
-              )}
-</Animated.View>
-          )}
-
-
-          {/* ── COMPARE MODE ────────────────────────────────────────────── */}
-          {compareMode && compareTarget && (() => {
-            const me = leaderboard.find(p => String(p.id) === String(currentUser?.id));
-            if (!me) return null;
-            return (
-              <Animated.View entering={FadeInDown.duration(300)} style={[st.card, { marginBottom: 16 }]}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 14 }}>
-                  <Ionicons name="git-compare-outline" size={15} color={ACCENT} />
-                  <Text style={[st.sectionLabel, { marginBottom: 0 }]}>{t('roomDetail.compare')}</Text>
-                  <View style={{ flex: 1 }} />
-                  <Pressable accessibilityRole="button" accessibilityLabel={t('roomDetail.closeCompareA11y')} hitSlop={8} onPress={() => { setCompareMode(false); setCompareTarget(null); }}>
-                    <Ionicons name="close-circle" size={20} color={TEXT_MUTED} />
-                  </Pressable>
-                </View>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center', marginBottom: 18 }}>
-                  <View style={{ alignItems: 'center', gap: 5 }}>
-                    <MemberAvatar url={me.avatar_url ? getStorageUrl(me.avatar_url) : null} name={me.username} size={56} borderColor={ACCENT} borderWidth={2} />
-                    <Text style={{ color: TEXT_LIGHT, fontSize: 11, fontWeight: '700' }}>{me.username.split(' ')[0]}</Text>
-                    <View style={st.youBadge}><Text style={st.youBadgeTxt}>{t('roomDetail.you')}</Text></View>
-                  </View>
-                  <View style={st.vsCircle}><Text style={{ color: ACCENT, fontWeight: '900', fontSize: 16 }}>{t('roomDetail.vs')}</Text></View>
-                  <View style={{ alignItems: 'center', gap: 5 }}>
-                    <MemberAvatar url={compareTarget.avatar_url ? getStorageUrl(compareTarget.avatar_url) : null} name={compareTarget.username} size={56} borderColor={CARD_BORDER} borderWidth={2} />
-                    <Text style={{ color: TEXT_LIGHT, fontSize: 11, fontWeight: '700' }}>{compareTarget.username.split(' ')[0]}</Text>
-                    <View style={st.rankBadge}><Text style={st.rankBadgeTxt}>#{compareTarget.rank}</Text></View>
-                  </View>
-                </View>
-                <CompareRow label={t('roomDetail.rowPoints')}   a={me.points}     b={compareTarget.points}     aName={me.username} bName={compareTarget.username} />
-                <CompareRow label={t('roomDetail.rowSessions')} a={me.sessions}   b={compareTarget.sessions}   aName={me.username} bName={compareTarget.username} />
-                <CompareRow label={t('roomDetail.rowReps')}     a={me.total_reps} b={compareTarget.total_reps} aName={me.username} bName={compareTarget.username} />
-              </Animated.View>
-            );
-          })()}
-
-          {/* ── PERIOD FILTER ────────────────────────────────────────────── */}
-          <View style={{ flexDirection: 'row', gap: 8, marginBottom: 16 }}>
-            {(['semana', 'mes', 'año'] as const).map(p => (
-              <Pressable
-                key={p}
-                accessibilityRole="button"
-                accessibilityLabel={t('roomDetail.periodA11y', { period: p })}
-                accessibilityState={{ selected: selectedPeriod === p }}
-                onPress={() => { setSelectedPeriod(p); fetchLeaderboard(token, p); }}
-                style={[st.filterBtn, selectedPeriod === p && { backgroundColor: ACCENT }]}
-              >
-                <Text style={[st.filterTxt, selectedPeriod === p && { color: '#fff' }]}>
-                  {p === 'semana' ? t('roomDetail.periodWeek') : p === 'mes' ? t('roomDetail.periodMonth') : t('roomDetail.periodYear')}
-                </Text>
-              </Pressable>
-            ))}
+                )}
+              </>
+            )}
           </View>
+        )}
 
-          {/* ── LEADERBOARD ──────────────────────────────────────────────── */}
-          <Text style={[st.sectionLabel, { marginBottom: 12 }]}>{t('roomDetail.leaderboard')}</Text>
-          {loadingLB ? (
-            <ActivityIndicator color={ACCENT} style={{ marginVertical: 16 }} />
-          ) : leaderboard.length === 0 ? (
-            <View style={[st.card, { alignItems: 'center', paddingVertical: 24, gap: 8 }]}>
-              <Ionicons name="bar-chart-outline" size={24} color={TEXT_MUTED} />
-              <Text style={{ color: TEXT_MUTED, fontSize: 12, fontStyle: 'italic' }}>{t('roomDetail.noData')}</Text>
-            </View>
-          ) : (
-            leaderboard.map(p => {
-              const isMe      = String(p.id) === String(currentUser?.id);
-              const avatarUrl = p.avatar_url ? getStorageUrl(p.avatar_url) : null;
-              return (
-                <Pressable
-                  key={p.id}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Ver perfil de ${p.username}`}
-                  onPress={() => { setSelectedMember(p); setCompareMode(false); setCompareTarget(null); }}
-                  style={[
-                    st.participantCard,
-                    isMe && { borderColor: ACCENT + '50', backgroundColor: ACCENT + '08' },
-                    p.rank === 1 && { borderColor: GOLD + '35' },
-                  ]}
-                >
-                  <View style={[st.rankNumBox, p.rank === 1 && { backgroundColor: ACCENT + '20' }]}>
-                    {p.rank <= 3
-                      ? <RankMedal rank={p.rank} size={15} />
-                      : <Text style={st.rankNum}>#{p.rank}</Text>
-                    }
-                  </View>
-                  <MemberAvatar url={avatarUrl} name={p.username} size={36} borderColor={isMe ? ACCENT : 'transparent'} borderWidth={isMe ? 1.5 : 0} />
-                  <Text style={[st.participantName, bf('700'), isMe && { color: ACCENT }]} numberOfLines={1}>
-                    {p.username}{isMe ? ` (${t('common.you')})` : ''}
-                  </Text>
-                  <View style={st.pStats}>
-                    <View style={{ alignItems: 'center' }}>
-<Text style={st.pStatVal}>{p.points}</Text>
-                      <Text style={st.pStatLbl}>{t('roomDetail.pts')}</Text>
-                    </View>
-                    <View style={st.pDivider} />
-                    <View style={{ alignItems: 'center' }}>
-                      <Text style={st.pStatVal}>{p.attendance_count}</Text>
-                      <Text style={st.pStatLbl}>{t('roomDetail.days')}</Text>
-                    </View>
-                    <View style={st.pDivider} />
-                    <View style={{ alignItems: 'center' }}>
-<Text style={st.pStatVal}>{p.streak ?? 0}</Text>
-                    <Text style={st.pStatLbl}>{t('roomDetail.streak')}</Text>
-                    </View>
-                  </View>
-                </Pressable>
-              );
-            })
-          )}
-
-
-          {/* ══════════════════════════════════════════════════════════════
-              JOURNEY — solo si es tu propio card
-          ══════════════════════════════════════════════════════════════ */}
-          {isOwnCard && (
-            <>
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 24, marginBottom: 12 }}>
-                <View>
-                  <Text style={st.sectionLabel}>{t('roomDetail.myJourney')}</Text>
-                  <Text style={{ color: TEXT_MUTED, fontSize: 11 }}>{t('roomDetail.myJourneyDesc')}</Text>
-                </View>
-                <Pressable onPress={openJourneyModal} style={st.addJourneyBtn}>
-                  <Ionicons name="add" size={20} color="#fff" />
-                  <Text style={{ color: '#fff', fontSize: 11, fontFamily: FONT_BOLD, letterSpacing: 0.8 }}>{t('roomDetail.add')}</Text>
-                </Pressable>
-              </View>
-
-              {journey.length === 0 ? (
-                <Pressable onPress={openJourneyModal} style={st.journeyEmpty}>
-                  <LinearGradient
-                    colors={[ACCENT + '10', '#6B35FF10']}
-                    style={StyleSheet.absoluteFillObject}
-                  />
-                  <View style={st.journeyEmptyIcon}>
-                    <MaterialCommunityIcons name="image-plus" size={36} color={ACCENT} />
-                  </View>
-                  <Text style={{ color: TEXT_LIGHT, fontSize: 16, fontFamily: FONT_BOLD, letterSpacing: 0.4, marginTop: 12 }}>{t('roomDetail.journeyEmptyTitle')}</Text>
-                  <Text style={{ color: TEXT_MUTED, fontSize: 12, marginTop: 4, textAlign: 'center' }}>
-                    {t('roomDetail.journeyEmptyDesc')}
-                  </Text>
-                  <View style={[st.addJourneyBtn, { marginTop: 14 }]}>
-                    <Ionicons name="camera" size={16} color="#fff" />
-                    <Text style={{ color: '#fff', fontSize: 11, fontFamily: FONT_BOLD, letterSpacing: 0.8 }}>{t('roomDetail.firstPhoto')}</Text>
-                  </View>
-                </Pressable>
-              ) : (
-                <View style={st.journeyGrid}>
-                  {journey.map((entry, idx) => (
-                    <Pressable
-                      key={entry.id}
-                      style={[st.journeyCard, idx % 2 === 0 && { marginRight: 8 }]}
-                      onLongPress={() => deleteJourneyEntry(entry.id)}
-                    >
-                      <Image
-                        source={{ uri: entry.imageUri }}
-                        style={st.journeyImg}
-                        contentFit="cover"
-                      />
-                      <LinearGradient
-                        colors={['transparent', 'rgba(7,7,15,0.9)']}
-                        style={st.journeyOverlay}
-                      />
-                      {/* Date chip */}
-                      <View style={st.journeyDateChip}>
-                        <Ionicons name="calendar-outline" size={9} color={ACCENT} />
-                        <Text style={st.journeyDateTxt}>{formatJourneyDate(entry.date)}</Text>
-                      </View>
-                      {entry.note.length > 0 && (
-                        <Text style={st.journeyNote} numberOfLines={2}>{entry.note}</Text>
-                      )}
-                      {/* If first, show "INICIO" badge; if latest, show "HOY" */}
-                      {idx === journey.length - 1 && (
-                        <View style={st.journeyBadge}>
-                          <Text style={st.journeyBadgeTxt}>{t('roomDetail.journeyStart')}</Text>
-                        </View>
-                      )}
-                      {idx === 0 && journey.length > 1 && (
-                        <View style={[st.journeyBadge, { backgroundColor: ACCENT }]}>
-                          <Text style={st.journeyBadgeTxt}>{t('roomDetail.journeyNow')}</Text>
-                        </View>
-                      )}
-                    </Pressable>
-                  ))}
-                </View>
-              )}
-
-              {journey.length > 0 && (
-                <Text style={{ color: TEXT_MUTED, fontSize: 10, textAlign: 'center', marginTop: 4, marginBottom: 4 }}>
-                  {t('roomDetail.holdToDelete', { count: journey.length })}
-                </Text>
-              )}
-</>
-          )}
-
-        {/* ══════════════════════════════════════════════════════════════════
-            MEMBER TABS — GRANDES Y CENTRADOS
-        ══════════════════════════════════════════════════════════════════ */}
-        <View style={st.tabsSection}>
-          <Text style={[st.sectionLabel, { textAlign: 'center', marginBottom: 16 }]}>{t('roomDetail.members')}</Text>
-
-          {loadingLB ? (
-            <ActivityIndicator color={ACCENT} style={{ marginVertical: 20 }} />
-          ) : leaderboard.length === 0 ? (
-            <View style={{ alignItems: 'center', paddingVertical: 24, gap: 8 }}>
-              <Ionicons name="people-outline" size={32} color={TEXT_MUTED} />
-              <Text style={{ color: TEXT_MUTED, fontSize: 13 }}>{t('roomDetail.noMembersYet')}</Text>
-            </View>
-          ) : (
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={[
-                st.tabsRow,
-                leaderboard.length <= 4 && { justifyContent: 'center', flexGrow: 1 },
-              ]}
-            >
-              {leaderboard.map(member => {
-                const isSelected = selectedMember?.id === member.id;
-                const avatarUrl  = member.avatar_url ? getStorageUrl(member.avatar_url) : null;
-                const isMe       = String(member.id) === String(currentUser?.id);
-                return (
-                  <Pressable
-                    key={member.id}
-                    accessibilityRole="button"
-                    accessibilityLabel={t('roomDetail.viewMemberA11y', { name: member.username })}
-                    accessibilityState={{ selected: isSelected }}
-                    onPress={() => { setSelectedMember(member); setCompareMode(false); setCompareTarget(null); }}
-                    style={[st.memberTab, isSelected && st.memberTabActive]}
-                  >
-                    {/* Glow ring when active */}
-                    {isSelected && (
-                      <View style={st.tabGlowRing} />
-                    )}
-
-                    {/* Rank badge */}
-                    {member.rank <= 3 && (
-                      <View style={st.tabRankBadge}>
-                        <RankMedal rank={member.rank} size={12} />
-                      </View>
-                    )}
-
-                    <MemberAvatar
-                      url={avatarUrl}
-                      name={member.username}
-                      size={72}
-                      borderColor={isSelected ? ACCENT : isMe ? ACCENT + '60' : 'rgba(255,255,255,0.06)'}
-                      borderWidth={isSelected ? 3 : 1.5}
-                    />
-
-                    <Text style={[st.tabName, isSelected && { color: ACCENT }]} numberOfLines={1}>
-                      {member.username.split(' ')[0]}
-                      {isMe ? ` (${t('common.you')})` : ''}
-                    </Text>
-                    <Text style={[st.tabPts, isSelected && { color: ACCENT + 'CC' }]}>
-                      {member.points} pts
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
-          )}
-        </View>
         </Animated.View>
       </ScrollView>
+      )}
+
+      {/* ══ MODALS ══ */}
 
       {/* ══════════════════════════════════════════════════════════════════
           PERFIL DE OTRO MIEMBRO
@@ -1494,16 +1389,12 @@ export default function RoomDetailScreen() {
                       borderWidth={2.5}
                     />
                     <Text style={[{ color: TEXT_LIGHT, fontSize: 20, marginTop: 12 }, bf('700')]}>{selectedMember.username}</Text>
-                    <View style={[st.rankBadge, { marginTop: 6 }]}>
-                      <Text style={st.rankBadgeTxt}>{t('roomDetail.rankInRoom', { rank: selectedMember.rank })}</Text>
-                    </View>
                   </View>
 
                   <View style={{ flexDirection: 'row', gap: 10, marginBottom: 20 }}>
                     {[
-                      { label: t('roomDetail.roomPoints'),   value: selectedMember.points },
                       { label: t('roomDetail.roomGymDays'), value: selectedMember.attendance_count },
-                      { label: t('roomDetail.roomStreak'),    value: selectedMember.streak ?? 0 },
+                      { label: t('roomDetail.roomStreak'),  value: selectedMember.streak ?? 0 },
                     ].map(({ label, value }) => (
                       <View key={label} style={{ flex: 1, backgroundColor: CARD_BG, borderRadius: 12, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: CARD_BORDER }}>
                         <Text style={[{ color: TEXT_LIGHT, fontSize: 18 }, bf('700')]}>{value}</Text>
@@ -1792,24 +1683,103 @@ export default function RoomDetailScreen() {
       {/* ══════════════════════════════════════════════════════════════════
           EDIT ROOM MODAL
       ══════════════════════════════════════════════════════════════════ */}
-      <Modal visible={showEditModal} transparent animationType="fade">
-        <Pressable style={st.modalOverlay} onPress={() => setShowEditModal(false)}>
-          <Pressable style={st.modalBox} onPress={() => {}}>
-            <Text style={[st.modalTitle, bf('700')]}>{t('roomDetail.editRoomTitle')}</Text>
-            <TextInput
-              style={st.modalInput} value={editName} onChangeText={setEditName}
-              placeholder={t('roomDetail.roomNamePlaceholder')} placeholderTextColor={TEXT_MUTED} autoFocus
-            />
-            <View style={{ flexDirection: 'row', gap: 10 }}>
-              <Pressable style={[st.modalBtn, { backgroundColor: CARD_BG2 }]} onPress={() => setShowEditModal(false)}>
-                <Text style={st.modalBtnTxt}>{t('common.cancel').toUpperCase()}</Text>
+      <Modal visible={showEditModal} transparent animationType="slide" onRequestClose={() => setShowEditModal(false)}>
+        <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' }} onPress={() => setShowEditModal(false)}>
+          <Pressable onPress={e => e.stopPropagation()}>
+            <View style={[st.bottomSheet, { paddingBottom: Math.max(insets.bottom, 24) }]}>
+              <View style={st.sheetHandle} />
+
+              {/* Header */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+                <Text style={[st.sheetTitle, bf('700')]}>Editar sala</Text>
+                <Pressable onPress={() => setShowEditModal(false)} hitSlop={10}>
+                  <Ionicons name="close" size={20} color={TEXT_MUTED} />
+                </Pressable>
+              </View>
+
+              {/* Cover photo picker */}
+              <Text style={{ color: TEXT_MUTED, fontSize: 11, fontWeight: '700', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 10 }}>Foto de portada</Text>
+              <Pressable onPress={handlePickCover} style={{ borderRadius: 16, overflow: 'hidden', marginBottom: 16, height: 140 }}>
+                {editCoverUri || coverImage ? (
+                  <View style={{ flex: 1 }}>
+                    <Image
+                      source={{ uri: editCoverUri || coverImage || '' }}
+                      style={StyleSheet.absoluteFillObject}
+                      contentFit="cover"
+                    />
+                    <LinearGradient colors={['rgba(0,0,0,0.0)', 'rgba(0,0,0,0.6)']} style={StyleSheet.absoluteFillObject} />
+                    <View style={{ position: 'absolute', bottom: 12, right: 12, flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6 }}>
+                      <Ionicons name="camera-outline" size={14} color="#fff" />
+                      <Text style={{ color: '#fff', fontSize: 12, fontWeight: '700' }}>Cambiar foto</Text>
+                    </View>
+                    {editCoverUri && (
+                      <View style={{ position: 'absolute', top: 10, left: 10, backgroundColor: ACCENT, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 }}>
+                        <Text style={{ color: '#fff', fontSize: 10, fontWeight: '800' }}>NUEVA</Text>
+                      </View>
+                    )}
+                  </View>
+                ) : (
+                  <View style={{ flex: 1, backgroundColor: CARD_BG2, alignItems: 'center', justifyContent: 'center', gap: 8, borderWidth: 1, borderColor: CARD_BORDER, borderStyle: 'dashed', borderRadius: 16 }}>
+                    <Ionicons name="image-outline" size={32} color={TEXT_MUTED} />
+                    <Text style={{ color: TEXT_MUTED, fontSize: 13, fontWeight: '600' }}>Agregar foto de portada</Text>
+                    <Text style={{ color: TEXT_MUTED, fontSize: 11, opacity: 0.6 }}>Toca para seleccionar de tu galería</Text>
+                  </View>
+                )}
               </Pressable>
-              <Pressable
-                style={[st.modalBtn, { backgroundColor: ACCENT }, !editName.trim() && { opacity: 0.4 }]}
-                onPress={handleSaveEdit} disabled={!editName.trim() || savingEdit}
-              >
-                {savingEdit ? <ActivityIndicator color="#fff" size="small" /> : <Text style={st.modalBtnTxt}>{t('common.save').toUpperCase()}</Text>}
-              </Pressable>
+
+              {/* Name field */}
+              <Text style={{ color: TEXT_MUTED, fontSize: 11, fontWeight: '700', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 8 }}>Nombre de la sala</Text>
+              <TextInput
+                style={[st.input, { marginBottom: 20, paddingHorizontal: 14 }]}
+                value={editName}
+                onChangeText={setEditName}
+                placeholder="Nombre de la sala"
+                placeholderTextColor={TEXT_MUTED}
+                maxLength={50}
+                autoCorrect={false}
+              />
+
+              {/* Apuestas sociales toggle */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: CARD_BG2, borderRadius: 14, padding: 14, marginBottom: 20, borderWidth: 1, borderColor: CARD_BORDER }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ color: TEXT_LIGHT, fontWeight: '700', fontSize: 14, marginBottom: 3 }}>Apuestas entre miembros</Text>
+                  <Text style={{ color: TEXT_MUTED, fontSize: 12, lineHeight: 17 }}>
+                    Permite que los miembros hagan predicciones entre ellos
+                  </Text>
+                </View>
+                <Pressable
+                  onPress={() => setEnableBets(v => !v)}
+                  style={[
+                    { width: 48, height: 26, borderRadius: 13, justifyContent: 'center', padding: 3 },
+                    enableBets ? { backgroundColor: ACCENT } : { backgroundColor: CARD_BORDER },
+                  ]}
+                >
+                  <View style={[
+                    { width: 20, height: 20, borderRadius: 10, backgroundColor: '#fff' },
+                    enableBets ? { alignSelf: 'flex-end' } : { alignSelf: 'flex-start' },
+                  ]} />
+                </Pressable>
+              </View>
+
+              {/* Buttons */}
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                <Pressable
+                  style={{ flex: 1, height: 48, borderRadius: 14, backgroundColor: CARD_BG2, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: CARD_BORDER }}
+                  onPress={() => setShowEditModal(false)}
+                >
+                  <Text style={{ color: TEXT_SUB, fontWeight: '700' }}>Cancelar</Text>
+                </Pressable>
+                <Pressable
+                  style={{ flex: 2, height: 48, borderRadius: 14, backgroundColor: ACCENT, alignItems: 'center', justifyContent: 'center', opacity: (!editName.trim() || savingEdit) ? 0.5 : 1 }}
+                  onPress={handleSaveEdit}
+                  disabled={!editName.trim() || savingEdit}
+                >
+                  {savingEdit
+                    ? <ActivityIndicator color="#fff" size="small" />
+                    : <Text style={{ color: '#fff', fontWeight: '800', fontSize: 15 }}>Guardar cambios</Text>
+                  }
+                </Pressable>
+              </View>
             </View>
           </Pressable>
         </Pressable>
@@ -1868,6 +1838,22 @@ const st = StyleSheet.create({
     width: 34, height: 34, borderRadius: 10,
     backgroundColor: CARD_BG2, borderWidth: 1, borderColor: CARD_BORDER,
     alignItems: 'center', justifyContent: 'center',
+  },
+  innerTabBar: {
+    flexDirection: 'row',
+    backgroundColor: BG_DARK,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: CARD_BORDER,
+  },
+  innerTabItem: {
+    flex: 1, alignItems: 'center', paddingVertical: 10, gap: 2, position: 'relative',
+  },
+  innerTabLabel: {
+    fontSize: 10, fontWeight: '700', letterSpacing: 0.6, color: TEXT_MUTED,
+  },
+  innerTabUnderline: {
+    position: 'absolute', bottom: 0, left: '20%', right: '20%',
+    height: 2, borderRadius: 2, backgroundColor: ACCENT,
   },
   codePill: {
     flexDirection: 'row', alignItems: 'center', gap: 5,

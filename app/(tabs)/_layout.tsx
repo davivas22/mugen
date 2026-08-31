@@ -58,7 +58,7 @@ export default function TabLayout() {
     >
       <Tabs.Screen name="index"   options={{ title: 'Dashboard', tabBarIcon: ({ focused }) => <TabIcon name="view-dashboard"  focused={focused} /> }} />
       <Tabs.Screen name="salas"   options={{ title: 'Salas',     tabBarIcon: ({ focused }) => <TabIcon name="account-group"   focused={focused} /> }} />
-      <Tabs.Screen name="ranking" options={{ title: 'Ranking',   tabBarIcon: ({ focused }) => <TabIcon name="trophy"          focused={focused} /> }} />
+      <Tabs.Screen name="ranking" options={{ href: null }} />
       <Tabs.Screen name="perfil"  options={{ title: 'Perfil',    tabBarIcon: ({ focused }) => <TabIcon name="account-circle"  focused={focused} /> }} />
     </Tabs>
   );

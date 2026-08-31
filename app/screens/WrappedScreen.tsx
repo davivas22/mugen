@@ -273,11 +273,11 @@ export default function WrappedScreen() {
         </View>
       </View>
       <Text style={s.subLabel}>
-        De {personal.planned_days} días planeados, fuiste {personal.total_days}
+        De {Math.round(personal.planned_days)} días planeados, fuiste {personal.total_days}
       </Text>
       {personal.missed_days > 0 && (
         <Text style={[s.subLabel, { color: '#ff6666', marginTop: 8 }]}>
-          Faltaste {personal.missed_days} días que tenías planeado ir
+          Faltaste {Math.round(personal.missed_days)} días que tenías planeado ir
         </Text>
       )}
     </SlideWrapper>,

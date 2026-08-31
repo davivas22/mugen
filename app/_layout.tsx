@@ -55,6 +55,11 @@ function InnerLayout() {
         <Stack.Screen name="screens/CreateChallengeScreen" options={{ headerShown: false }} />
         <Stack.Screen name="screens/JoinChallengeScreen"   options={{ headerShown: false }} />
         <Stack.Screen name="screens/ScanQRScreen"          options={{ headerShown: false, presentation: 'modal' }} />
+        <Stack.Screen name="screens/WrappedScreen"         options={{ headerShown: false }} />
+        <Stack.Screen name="screens/PledgeScreen"          options={{ headerShown: false }} />
+        <Stack.Screen name="screens/BattleScreen"          options={{ headerShown: false }} />
+        <Stack.Screen name="screens/CommitmentsScreen"     options={{ headerShown: false }} />
+        <Stack.Screen name="screens/ProfileScreen"         options={{ headerShown: false }} />
       </Stack>
       <StatusBar style={isDark ? 'light' : 'dark'} />
     </ThemeProvider>

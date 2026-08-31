@@ -29,7 +29,7 @@ const slides = [
   },
   {
     id: '3',
-    image: require('../assets/images/image.png'),
+    image: require('../assets/images/image_promo.jpg'),
     title: 'Entrena con amigos\ny alcanza tus metas',
   },
 ];

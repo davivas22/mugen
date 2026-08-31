@@ -3,9 +3,10 @@ import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 
 const FALLBACK_HOST = '10.0.2.2';
+const NGROK_URL = 'https://swimsuit-unaware-judge.ngrok-free.dev';
 
 const getHostBase = () => {
-  if (!__DEV__) return 'https://tu-api-produccion.com';
+  if (!__DEV__) return NGROK_URL;
   if (Platform.OS === 'web') return 'http://localhost:8000';
   const debuggerHost = Constants.expoConfig?.hostUri?.split(':')[0];
   if (!debuggerHost || debuggerHost.includes('ngrok') || debuggerHost.includes('exp.direct')) {
@@ -21,7 +22,7 @@ export const getStorageUrl = (path: string | null | undefined): string | null =>
 };
 
 const getBaseUrl = () => {
-  if (!__DEV__) return 'https://tu-api-produccion.com/api';
+  if (!__DEV__) return `${NGROK_URL}/api`;
   if (Platform.OS === 'web') return 'http://localhost:8000/api';
   const debuggerHost = Constants.expoConfig?.hostUri?.split(':')[0];
   if (!debuggerHost || debuggerHost.includes('ngrok') || debuggerHost.includes('exp.direct')) {
@@ -218,6 +219,24 @@ export const pledgeApi = {
     api.post(`/challenges/${challengeId}/pledges`, { target_days: targetDays }, { headers: { Authorization: `Bearer ${token}` } }),
 };
 
+export const socialBetApi = {
+  list: (challengeId: number | string, token: string) =>
+    api.get(`/challenges/${challengeId}/social-bets`, { headers: { Authorization: `Bearer ${token}` } }),
+
+  create: (
+    challengeId: number | string,
+    payload: { target_user_id: number; bet_type: string; description?: string; stake?: string },
+    token: string,
+  ) =>
+    api.post(`/challenges/${challengeId}/social-bets`, payload, { headers: { Authorization: `Bearer ${token}` } }),
+
+  resolve: (betId: number | string, outcome: boolean, token: string) =>
+    api.post(`/social-bets/${betId}/resolve`, { outcome }, { headers: { Authorization: `Bearer ${token}` } }),
+
+  remove: (betId: number | string, token: string) =>
+    api.delete(`/social-bets/${betId}`, { headers: { Authorization: `Bearer ${token}` } }),
+};
+
 export const commitmentApi = {
   get: (challengeId: number | string, token: string) =>
     api.get(`/challenges/${challengeId}/commitments`, { headers: { Authorization: `Bearer ${token}` } }),
@@ -335,6 +354,14 @@ export const challengeApi = {
   update: (id: number | string, data: { name: string }, token: string) =>
     api.put(`/challenges/${id}`, data, {
       headers: { Authorization: `Bearer ${token}` },
+    }),
+
+  updateWithCover: (id: number | string, formData: FormData, token: string) =>
+    api.post(`/challenges/${id}`, formData, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'multipart/form-data',
+      },
     }),
 
   delete: (id: number | string, token: string) =>

@@ -1,143 +1,137 @@
-import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
-import { storage } from "../services/storage";
-import React, { useState } from "react";
-import { ActivityIndicator, Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
-import { authApi } from "../services/api";
+import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
+import { storage } from '../services/storage';
+import React, { useState } from 'react';
+import {
+  ActivityIndicator, Alert, KeyboardAvoidingView,
+  Platform, Pressable, StatusBar, StyleSheet, Text, TextInput,
+  TouchableOpacity, View,
+} from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { authApi } from '../services/api';
+
+const ACCENT = '#FF0066';
 
 export default function LoginScreen() {
-  const router = useRouter();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [loading, setLoading] = useState(false);
+  const router  = useRouter();
+  const insets  = useSafeAreaInsets();
+  const [email,    setEmail]    = useState('');
+  const [password, setPassword] = useState('');
+  const [showPwd,  setShowPwd]  = useState(false);
+  const [loading,  setLoading]  = useState(false);
 
   const login = async () => {
-    if (!email || !password) {
-      Alert.alert("Error", "Completa todos los campos.");
+    if (!email.trim() || !password) {
+      Alert.alert('Campos incompletos', 'Ingresa tu email y contraseña.');
       return;
     }
-
     setLoading(true);
     try {
-      const { data } = await authApi.login(email, password);
-      const token = data.token ?? data.access_token ?? "";
-      const user = data.user ?? {};
-      try {
-        await storage.set("token", token);
-        await storage.set("user", JSON.stringify(user));
-      } catch (storeErr) {
-        console.warn("SecureStore error:", storeErr);
-      }
-      console.log('[LOGIN] router.replace antes');
+      const { data } = await authApi.login(email.trim(), password);
+      const token = data.token ?? data.access_token ?? '';
+      const user  = data.user ?? {};
+      await storage.set('token', token);
+      await storage.set('user', JSON.stringify(user));
       router.dismissAll();
-      router.replace("/(tabs)");
-      console.log('[LOGIN] router.replace después');
+      router.replace('/(tabs)');
     } catch (error: any) {
-      const msg = error?.response?.data?.message || "No se pudo iniciar sesión.";
-      Alert.alert("Error", msg);
+      const msg = error?.response?.data?.message || 'Email o contraseña incorrectos.';
+      Alert.alert('Error', msg);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <View style={styles.container}>
-      <TouchableOpacity style={styles.backButton} onPress={() => router.replace("/onboarding")}>
-        <Ionicons name="arrow-back" size={26} color="#000" />
+    <View style={s.container}>
+      <StatusBar barStyle="dark-content" backgroundColor="#fff" />
+
+      <TouchableOpacity
+        style={[s.backButton, { top: insets.top + 16 }]}
+        onPress={() => router.replace('/onboarding')}
+      >
+        <Ionicons name="arrow-back" size={24} color="#000" />
       </TouchableOpacity>
 
-      <View style={styles.card}>
-        <Text style={styles.title}>Bienvenido de nuevo</Text>
-        <Text style={styles.subtitle}>Inicia sesión</Text>
+      <KeyboardAvoidingView
+        style={{ flex: 1, justifyContent: 'center' }}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
+        <View style={s.card}>
+          <Text style={s.title}>Bienvenido de nuevo</Text>
+          <Text style={s.subtitle}>Inicia sesión para continuar.</Text>
 
-        <View style={styles.inputContainer}>
-          <Ionicons name="mail" size={20} color="#ff4da6" style={{ marginRight: 10 }} />
-          <TextInput
-            placeholder="Email"
-            placeholderTextColor="#999"
-            style={styles.input}
-            value={email}
-            onChangeText={setEmail}
-            keyboardType="email-address"
-            autoCapitalize="none"
-          />
+          <View style={s.inputContainer}>
+            <Ionicons name="mail" size={20} color={ACCENT} style={{ marginRight: 10 }} />
+            <TextInput
+              style={s.input}
+              placeholder="Email"
+              placeholderTextColor="#999"
+              value={email}
+              onChangeText={setEmail}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+          </View>
+
+          <View style={s.inputContainer}>
+            <Ionicons name="lock-closed" size={20} color={ACCENT} style={{ marginRight: 10 }} />
+            <TextInput
+              style={s.input}
+              placeholder="Contraseña"
+              placeholderTextColor="#999"
+              secureTextEntry={!showPwd}
+              value={password}
+              onChangeText={setPassword}
+              onSubmitEditing={login}
+              returnKeyType="go"
+            />
+            <Pressable onPress={() => setShowPwd(p => !p)} hitSlop={10}>
+              <Ionicons name={showPwd ? 'eye-off-outline' : 'eye-outline'} size={18} color="#999" />
+            </Pressable>
+          </View>
+
+          <TouchableOpacity
+            style={[s.button, loading && { opacity: 0.7 }]}
+            onPress={login}
+            disabled={loading}
+          >
+            {loading
+              ? <ActivityIndicator color="#fff" />
+              : <Text style={s.buttonText}>Iniciar sesión</Text>}
+          </TouchableOpacity>
+
+          <Text style={s.registerText}>
+            ¿No tienes cuenta?{' '}
+            <Text style={s.registerLink} onPress={() => router.replace('/register')}>
+              Regístrate
+            </Text>
+          </Text>
         </View>
-
-        <View style={styles.inputContainer}>
-          <Ionicons name="lock-closed" size={20} color="#ff4da6" style={{ marginRight: 10 }} />
-          <TextInput
-            placeholder="Contraseña"
-            placeholderTextColor="#999"
-            secureTextEntry
-            style={styles.input}
-            value={password}
-            onChangeText={setPassword}
-          />
-        </View>
-
-        <TouchableOpacity onPress={login} style={styles.button} disabled={loading}>
-          {loading ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={styles.buttonText}>Iniciar sesión</Text>
-          )}
-        </TouchableOpacity>
-      </View>
+      </KeyboardAvoidingView>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "#ffffff",
-  },
-  card: {
-    width: "90%",
-    padding: 25,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: "bold",
-    textAlign: "center",
-    color: "#000",
-  },
-  subtitle: {
-    textAlign: "center",
-    marginBottom: 25,
-    color: "#666",
-  },
+const s = StyleSheet.create({
+  container:  { flex: 1, backgroundColor: '#fff', alignItems: 'center' },
+  backButton: { position: 'absolute', left: 20, zIndex: 10 },
+
+  card:     { width: '90%', padding: 25 },
+  title:    { fontSize: 28, fontWeight: 'bold', textAlign: 'center', color: '#000' },
+  subtitle: { textAlign: 'center', color: '#666', marginBottom: 25, marginTop: 5 },
+
   inputContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#f5f5f5",
-    borderRadius: 12,
-    paddingHorizontal: 15,
-    marginBottom: 15,
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: '#f5f5f5', borderRadius: 12,
+    paddingHorizontal: 15, marginBottom: 15,
   },
-  input: {
-    flex: 1,
-    paddingVertical: 15,
-    color: "#000",
-  },
-  button: {
-    backgroundColor: "#000",
-    padding: 16,
-    borderRadius: 12,
-    alignItems: "center",
-    marginTop: 10,
-  },
-  buttonText: {
-    color: "#fff",
-    fontWeight: "bold",
-    fontSize: 16,
-  },
-  backButton: {
-    position: "absolute",
-    top: 60,
-    left: 20,
-    zIndex: 10,
-  },
+  input: { flex: 1, paddingVertical: 15, color: '#000', fontSize: 15 },
+
+  button:     { backgroundColor: '#000', padding: 16, borderRadius: 12, alignItems: 'center', marginTop: 10 },
+  buttonText: { color: '#fff', fontWeight: 'bold', fontSize: 16 },
+
+  registerText: { textAlign: 'center', marginTop: 20, color: '#666' },
+  registerLink: { color: ACCENT, fontWeight: 'bold' },
 });
