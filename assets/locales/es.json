@@ -484,7 +484,8 @@
     "login": "Iniciar Sesión",
     "loginWithGoogle": "Iniciar Sesión con Google",
     "loginWithEmail": "Iniciar sesión con Email",
-    "termsNote": "By continuing, you agree to Terms and Privacy Policy"
+    "connecting": "Conectando...",
+    "termsNote": "Al continuar, aceptas los Términos y la Política de Privacidad"
   },
   "modal": {
     "whatDoYouWant": "¿Qué quieres hacer?",
@@ -514,7 +515,13 @@
     "googleCancelled": "Inicio de sesión con Google cancelado.",
     "googleFailed": "No se pudo iniciar sesión con Google.",
     "googleNoToken": "Google no devolvió una sesión válida.",
-    "googleServerError": "El servidor rechazó el inicio de sesión con Google."
+    "googleServerError": "El servidor rechazó el inicio de sesión con Google.",
+    "loginSubtitle": "Inicia sesión para continuar.",
+    "noAccount": "¿No tienes cuenta?",
+    "register": "Regístrate",
+    "birthdate": "Fecha de nacimiento",
+    "birthdateValue": "{{day}} de {{month}} de {{year}}",
+    "mustBeAdult": "Debes ser mayor de edad (18 años o más) para registrarte."
   },
   "personalizado": {
     "genderTitle": "Elige tu género",

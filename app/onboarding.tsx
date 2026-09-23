@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { Alert, Animated, Dimensions, Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { GoogleSignin, statusCodes } from '@react-native-google-signin/google-signin';
+import { useTranslation } from 'react-i18next';
 import { authApi } from '../services/api';
 import { storage } from '../services/storage';
 
@@ -17,24 +18,13 @@ const IMAGE_WIDTH = width;
 const IMAGE_HEIGHT = height;
 
 const slides = [
-  {
-    id: '1',
-    image: require('../assets/images/mige.jpg'),
-    title: 'Entrena con amigos\ny alcanza tus metas',
-  },
-  {
-    id: '2',
-    image: require('../assets/images/squad.jpg'),
-    title: 'Entrena con amigos\ny alcanza tus metas',
-  },
-  {
-    id: '3',
-    image: require('../assets/images/image_promo.jpg'),
-    title: 'Entrena con amigos\ny alcanza tus metas',
-  },
+  { id: '1', image: require('../assets/images/mige.jpg') },
+  { id: '2', image: require('../assets/images/squad.jpg') },
+  { id: '3', image: require('../assets/images/image_promo.jpg') },
 ];
 
 export default function Onboarding() {
+  const { t } = useTranslation();
   const [modalVisible, setModalVisible]   = useState(false);
   const [pressed, setPressed]             = useState(false);
   const [currentIndex, setCurrentIndex]   = useState(0);
@@ -52,7 +42,7 @@ export default function Onboarding() {
       router.replace('/(tabs)');
     } catch (err: any) {
       console.log('[GOOGLE TOKEN ERROR]', err?.response?.data ?? err?.message);
-      Alert.alert('Error backend', JSON.stringify(err?.response?.data ?? err?.message));
+      Alert.alert(t('common.error'), t('auth.googleServerError'));
     }
   };
 
@@ -68,7 +58,7 @@ export default function Onboarding() {
     } catch (error: any) {
       console.log('[GOOGLE ERROR] code:', error.code, 'message:', error.message);
       if (error.code !== statusCodes.SIGN_IN_CANCELLED) {
-        Alert.alert('Error', `${error.code ?? ''}: ${error.message ?? 'Error desconocido'}`);
+        Alert.alert(t('common.error'), t('auth.googleFailed'));
       }
     } finally {
       setGoogleLoading(false);
@@ -125,9 +115,7 @@ export default function Onboarding() {
 
       <View style={styles.content}>
 
-        {slides[currentIndex].title ? (
-          <Text style={styles.title}>{slides[currentIndex].title}</Text>
-        ) : null}
+        <Text style={styles.title}>{t('onboardingFlow.slideTitle')}</Text>
 
         <TouchableOpacity
           style={[styles.button, { backgroundColor: pressed ? '#ff4da6' : '#01060b' }]}
@@ -135,13 +123,13 @@ export default function Onboarding() {
           onPressOut={() => setPressed(false)}
           onPress={() => router.push('/register')}
         >
-          <Text style={styles.buttonText}>Empezar</Text>
+          <Text style={styles.buttonText}>{t('onboardingFlow.start')}</Text>
         </TouchableOpacity>
 
         <Text style={styles.loginText}>
-          Ya tienes una cuenta?{' '}
+          {t('onboardingFlow.alreadyHaveAccount')}{' '}
           <Text style={styles.loginLink} onPress={() => setModalVisible(true)}>
-            Iniciar Sesion
+            {t('onboardingFlow.login')}
           </Text>
         </Text>
 
@@ -152,7 +140,7 @@ export default function Onboarding() {
           <View style={styles.modalContent}>
 
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Iniciar Sesion</Text>
+              <Text style={styles.modalTitle}>{t('onboardingFlow.login')}</Text>
               <Text style={styles.close} onPress={() => setModalVisible(false)}>✕</Text>
             </View>
 
@@ -167,7 +155,7 @@ export default function Onboarding() {
                   style={styles.googleIcon}
                 />
                 <Text style={{ fontSize: 16 }}>
-                  {googleLoading ? 'Conectando...' : 'Iniciar Sesión con Google'}
+                  {googleLoading ? t('onboardingFlow.connecting') : t('onboardingFlow.loginWithGoogle')}
                 </Text>
               </View>
             </TouchableOpacity>
@@ -179,11 +167,11 @@ export default function Onboarding() {
                 router.push('/login');
               }}
             >
-              <Text>Iniciar sesion con Email</Text>
+              <Text>{t('onboardingFlow.loginWithEmail')}</Text>
             </TouchableOpacity>
 
             <Text style={styles.terms}>
-              By continuing, you agree to Terms and Privacy Policy
+              {t('onboardingFlow.termsNote')}
             </Text>
 
           </View>

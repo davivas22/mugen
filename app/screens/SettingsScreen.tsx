@@ -56,10 +56,10 @@ export default function SettingsScreen() {
     const currentLanguage = i18n.resolvedLanguage ?? i18n.language;
     const nextLang = currentLanguage === 'es' ? 'en' : 'es';
     try {
-      await storage.set('language', nextLang);
       await i18n.changeLanguage(nextLang);
+      storage.set('language', nextLang).catch(e => console.log('[i18n] Error saving language:', e));
     } catch (e) {
-      console.log('[i18n] Error saving language:', e);
+      console.log('[i18n] Error changing language:', e);
     }
   };
 

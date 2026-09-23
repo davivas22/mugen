@@ -112,8 +112,8 @@ export const fetchMultipart = (
 };
 
 export const authApi = {
-  register: (name: string, email: string, password: string) =>
-    api.post('/register', { name, email, password, password_confirmation: password }),
+  register: (name: string, email: string, password: string, birthdate: string) =>
+    api.post('/register', { name, email, password, password_confirmation: password, birthdate }),
 
   login: (email: string, password: string) =>
     api.post('/login', { email, password }),
@@ -136,6 +136,21 @@ export const inviteApi = {
 
   join: (code: string, token: string) =>
     api.post(`/challenges/join/${code}`, {}, {
+      headers: { Authorization: `Bearer ${token}` },
+    }),
+
+  requests: (challengeId: number | string, token: string) =>
+    api.get(`/challenges/${challengeId}/requests`, {
+      headers: { Authorization: `Bearer ${token}` },
+    }),
+
+  approveRequest: (challengeId: number | string, requestId: number, token: string) =>
+    api.post(`/challenges/${challengeId}/requests/${requestId}/approve`, {}, {
+      headers: { Authorization: `Bearer ${token}` },
+    }),
+
+  rejectRequest: (challengeId: number | string, requestId: number, token: string) =>
+    api.post(`/challenges/${challengeId}/requests/${requestId}/reject`, {}, {
       headers: { Authorization: `Bearer ${token}` },
     }),
 };
@@ -293,6 +308,11 @@ export const attendanceApi = {
     api.post(`/attendances/${attendanceId}/confirm`, {}, {
       headers: { Authorization: `Bearer ${token}` },
     }),
+
+  rejectAttendance: (attendanceId: number, token: string) =>
+    api.post(`/attendances/${attendanceId}/reject`, {}, {
+      headers: { Authorization: `Bearer ${token}` },
+    }),
 };
 
 export const challengeApi = {
@@ -310,6 +330,7 @@ export const challengeApi = {
     useCamera: boolean;
     gymLat: number | null;
     gymLng: number | null;
+    isPrivate?: boolean;
   }, token: string) => {
     const data = new FormData();
     data.append('name', form.name);
@@ -324,6 +345,7 @@ export const challengeApi = {
       data.append('gym_lng', String(form.gymLng ?? 0));
     }
     data.append('use_camera', form.useCamera ? '1' : '0');
+    data.append('is_private', form.isPrivate ? '1' : '0');
 
     // Debug: log full payload
     const debugPayload: Record<string, any> = {};

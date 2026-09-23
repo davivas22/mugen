@@ -484,6 +484,7 @@
     "login": "Log In",
     "loginWithGoogle": "Continue with Google",
     "loginWithEmail": "Continue with Email",
+    "connecting": "Connecting...",
     "termsNote": "By continuing, you agree to our Terms and Privacy Policy"
   },
   "modal": {
@@ -511,11 +512,16 @@
     "googleSignIn": "Continue with Google",
     "or": "or",
     "googleNotConfigured": "Google is not configured in this app yet.",
-    "googleNotConfigured": "Google is not configured in this app yet.",
     "googleCancelled": "Google sign-in was cancelled.",
     "googleFailed": "Could not sign in with Google.",
     "googleNoToken": "Google did not return a valid session.",
-    "googleServerError": "The server rejected the Google sign-in."
+    "googleServerError": "The server rejected the Google sign-in.",
+    "loginSubtitle": "Log in to continue.",
+    "noAccount": "Don't have an account?",
+    "register": "Sign up",
+    "birthdate": "Date of birth",
+    "birthdateValue": "{{month}} {{day}}, {{year}}",
+    "mustBeAdult": "You must be an adult (18 years or older) to register."
   },
   "personalizado": {
     "genderTitle": "Choose your gender",

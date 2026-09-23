@@ -8,6 +8,7 @@ import {
   TouchableOpacity, View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import { authApi } from '../services/api';
 
 const ACCENT = '#FF0066';
@@ -15,6 +16,7 @@ const ACCENT = '#FF0066';
 export default function LoginScreen() {
   const router  = useRouter();
   const insets  = useSafeAreaInsets();
+  const { t } = useTranslation();
   const [email,    setEmail]    = useState('');
   const [password, setPassword] = useState('');
   const [showPwd,  setShowPwd]  = useState(false);
@@ -22,7 +24,7 @@ export default function LoginScreen() {
 
   const login = async () => {
     if (!email.trim() || !password) {
-      Alert.alert('Campos incompletos', 'Ingresa tu email y contraseña.');
+      Alert.alert(t('common.error'), t('auth.fillAll'));
       return;
     }
     setLoading(true);
@@ -35,8 +37,8 @@ export default function LoginScreen() {
       router.dismissAll();
       router.replace('/(tabs)');
     } catch (error: any) {
-      const msg = error?.response?.data?.message || 'Email o contraseña incorrectos.';
-      Alert.alert('Error', msg);
+      const msg = error?.response?.data?.message || t('auth.loginError');
+      Alert.alert(t('common.error'), msg);
     } finally {
       setLoading(false);
     }
@@ -58,14 +60,14 @@ export default function LoginScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
         <View style={s.card}>
-          <Text style={s.title}>Bienvenido de nuevo</Text>
-          <Text style={s.subtitle}>Inicia sesión para continuar.</Text>
+          <Text style={s.title}>{t('auth.welcomeBack')}</Text>
+          <Text style={s.subtitle}>{t('auth.loginSubtitle')}</Text>
 
           <View style={s.inputContainer}>
             <Ionicons name="mail" size={20} color={ACCENT} style={{ marginRight: 10 }} />
             <TextInput
               style={s.input}
-              placeholder="Email"
+              placeholder={t('auth.email')}
               placeholderTextColor="#999"
               value={email}
               onChangeText={setEmail}
@@ -79,7 +81,7 @@ export default function LoginScreen() {
             <Ionicons name="lock-closed" size={20} color={ACCENT} style={{ marginRight: 10 }} />
             <TextInput
               style={s.input}
-              placeholder="Contraseña"
+              placeholder={t('auth.password')}
               placeholderTextColor="#999"
               secureTextEntry={!showPwd}
               value={password}
@@ -99,13 +101,13 @@ export default function LoginScreen() {
           >
             {loading
               ? <ActivityIndicator color="#fff" />
-              : <Text style={s.buttonText}>Iniciar sesión</Text>}
+              : <Text style={s.buttonText}>{t('auth.loginCta')}</Text>}
           </TouchableOpacity>
 
           <Text style={s.registerText}>
-            ¿No tienes cuenta?{' '}
+            {t('auth.noAccount')}{' '}
             <Text style={s.registerLink} onPress={() => router.replace('/register')}>
-              Regístrate
+              {t('auth.register')}
             </Text>
           </Text>
         </View>

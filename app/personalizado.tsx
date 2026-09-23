@@ -3,13 +3,19 @@ import { useRouter } from "expo-router";
 import React, { useState } from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import WheelScrollPicker from "react-native-wheel-scrollview-picker";
+import { useTranslation } from "react-i18next";
+
+const MONTHS_ES = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
+const MONTHS_EN = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 
 export default function PersonalizadoScreen() {
   const router = useRouter();
+  const { t, i18n } = useTranslation();
+  const MONTHS = (i18n.resolvedLanguage ?? i18n.language ?? 'es').slice(0, 2) === 'en' ? MONTHS_EN : MONTHS_ES;
 
   const [step, setStep] = useState(1);
   const [gender, setGender] = useState("");
-  const [month, setMonth] = useState("Enero");
+  const [month, setMonth] = useState(MONTHS[0]);
   const [day, setDay] = useState("01");
   const [year, setYear] = useState("2000");
   const [height, setHeight] = useState("170 cm");
@@ -47,17 +53,21 @@ export default function PersonalizadoScreen() {
       {/* STEP 1 — Género */}
       {step === 1 && (
         <>
-          <Text style={styles.title}>Elige tu género</Text>
-          <Text style={styles.subtitle}>Esto se usará para ajustar tu plan.</Text>
+          <Text style={styles.title}>{t('personalizado.genderTitle')}</Text>
+          <Text style={styles.subtitle}>{t('personalizado.genderSubtitle')}</Text>
 
           <View style={styles.options}>
-            {["Femenino", "Masculino", "Otro"].map((item) => (
+            {[
+              { key: "Femenino", label: t('personalizado.female') },
+              { key: "Masculino", label: t('personalizado.male') },
+              { key: "Otro", label: t('personalizado.other') },
+            ].map((item) => (
               <TouchableOpacity
-                key={item}
-                style={[styles.option, gender === item && styles.optionSelected]}
-                onPress={() => setGender(item)}
+                key={item.key}
+                style={[styles.option, gender === item.key && styles.optionSelected]}
+                onPress={() => setGender(item.key)}
               >
-                <Text style={styles.optionText}>{item}</Text>
+                <Text style={styles.optionText}>{item.label}</Text>
               </TouchableOpacity>
             ))}
           </View>
@@ -67,7 +77,7 @@ export default function PersonalizadoScreen() {
             disabled={!gender}
             onPress={next}
           >
-            <Text style={styles.buttonText}>Continuar</Text>
+            <Text style={styles.buttonText}>{t('personalizado.continue')}</Text>
           </TouchableOpacity>
         </>
       )}
@@ -75,13 +85,12 @@ export default function PersonalizadoScreen() {
       {/* STEP 2 — Fecha de nacimiento */}
       {step === 2 && (
         <>
-          <Text style={styles.title}>¿Cuándo naciste?</Text>
-          <Text style={styles.subtitle}>Se usa para calcular tus objetivos nutricionales.</Text>
+          <Text style={styles.title}>{t('personalizado.birthTitle')}</Text>
+          <Text style={styles.subtitle}>{t('personalizado.birthSubtitle')}</Text>
 
           <View style={styles.pickerRow}>
             <WheelScrollPicker
-              dataSource={["Enero","Febrero","Marzo","Abril","Mayo","Junio",
-                "Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"]}
+              dataSource={MONTHS}
               selectedIndex={0}
               onValueChange={(data) => setMonth(data)}
               wrapperHeight={180} wrapperWidth={120} itemHeight={40}
@@ -104,7 +113,7 @@ export default function PersonalizadoScreen() {
           </View>
 
           <TouchableOpacity style={styles.button} onPress={next}>
-            <Text style={styles.buttonText}>Continuar</Text>
+            <Text style={styles.buttonText}>{t('personalizado.continue')}</Text>
           </TouchableOpacity>
         </>
       )}
@@ -112,8 +121,8 @@ export default function PersonalizadoScreen() {
       {/* STEP 3 — Altura y peso */}
       {step === 3 && (
         <>
-          <Text style={styles.title}>Altura y peso</Text>
-          <Text style={styles.subtitle}>Se usa para tu plan diario.</Text>
+          <Text style={styles.title}>{t('personalizado.heightWeightTitle')}</Text>
+          <Text style={styles.subtitle}>{t('personalizado.heightWeightSubtitle')}</Text>
 
           <View style={styles.pickerRow}>
             <WheelScrollPicker
@@ -133,7 +142,7 @@ export default function PersonalizadoScreen() {
           </View>
 
           <TouchableOpacity style={styles.button} onPress={next}>
-            <Text style={styles.buttonText}>Empezar</Text>
+            <Text style={styles.buttonText}>{t('personalizado.start')}</Text>
           </TouchableOpacity>
         </>
       )}

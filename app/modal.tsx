@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 
 const ACCENT = '#FF0066';
 
@@ -19,6 +20,7 @@ interface Props {
 
 export function CrearSalaModal({ visible, onClose }: Props) {
   const router = useRouter();
+  const { t } = useTranslation();
 
   const handleCrear = () => {
     onClose();
@@ -35,15 +37,15 @@ export function CrearSalaModal({ visible, onClose }: Props) {
       <Pressable style={s.overlay} onPress={onClose}>
         <Pressable style={s.sheet} onPress={() => {}}>
           <View style={s.handle} />
-          <Text style={s.title}>¿Qué quieres hacer?</Text>
+          <Text style={s.title}>{t('modal.whatDoYouWant')}</Text>
 
           <TouchableOpacity style={s.option} onPress={handleCrear} activeOpacity={0.8}>
             <View style={[s.iconWrap, { backgroundColor: ACCENT + '15' }]}>
               <Ionicons name="add-circle-outline" size={24} color={ACCENT} />
             </View>
             <View style={s.optionText}>
-              <Text style={s.optionTitle}>Crear una sala</Text>
-              <Text style={s.optionDesc}>Crea tu desafío y invita a tus amigos</Text>
+              <Text style={s.optionTitle}>{t('modal.createRoom')}</Text>
+              <Text style={s.optionDesc}>{t('modal.createRoomDesc')}</Text>
             </View>
             <Ionicons name="chevron-forward" size={18} color="#aaa" />
           </TouchableOpacity>
@@ -55,14 +57,14 @@ export function CrearSalaModal({ visible, onClose }: Props) {
               <Ionicons name="enter-outline" size={24} color="#0a0a0a" />
             </View>
             <View style={s.optionText}>
-              <Text style={s.optionTitle}>Unirse a una sala</Text>
-              <Text style={s.optionDesc}>Ingresa un código o escanea el QR</Text>
+              <Text style={s.optionTitle}>{t('modal.joinRoom')}</Text>
+              <Text style={s.optionDesc}>{t('modal.joinRoomDesc')}</Text>
             </View>
             <Ionicons name="chevron-forward" size={18} color="#aaa" />
           </TouchableOpacity>
 
           <TouchableOpacity style={s.cancelBtn} onPress={onClose}>
-            <Text style={s.cancelText}>Cancelar</Text>
+            <Text style={s.cancelText}>{t('common.cancel')}</Text>
           </TouchableOpacity>
         </Pressable>
       </Pressable>
